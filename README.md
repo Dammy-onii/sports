@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Touchline ⚽
 
-## Getting Started
+A social football **club management** game. Build a club, develop players, make tactical calls, and compete against other managers for trophies. You manage the match rather than play it.
 
-First, run the development server:
+**Status:** Phase 1 (offline vertical slice) is complete. See the [roadmap](docs/ROADMAP.md).
+
+- 📘 [Game Design Document](docs/GAME_DESIGN.md)
+- 🏗️ [Architecture](docs/ARCHITECTURE.md)
+- 🗺️ [Roadmap, decision log & improvements](docs/ROADMAP.md)
+
+## What's playable now (fully offline)
+
+- **Career:** create your club (name, colours, formation), inherit a generated squad, and play a 22-round league against 11 AI clubs. Seasons roll over with aging, retirements and youth intake.
+- **Match day:** a 2D top-down match engine with live commentary, stats (possession, shots, xG and more) and player ratings. You can change tactics, formation and subs mid-match, at speeds from 1× to 16×, or skip to the end.
+- **Tactics:** 5 formations, a tap-to-swap pitch, and 6 team-instruction sliders.
+- **Squad & training:** FM-lite attributes (16, on a 1–20 scale), potential, fitness, morale, injuries, a weekly training focus and intensity, and player renaming.
+- **Quick match:** any two clubs. Manage either side or just watch.
+- **PWA:** installable, with the app shell cached by a service worker.
+
+## Develop
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # http://localhost:3000
+npm test           # engine determinism, calibration, fixtures, full season
+npm run calibrate  # print engine averages vs real football over N matches
+npm run typecheck
+npm run lint
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The match engine in `game/` is pure, deterministic TypeScript, so the same seed and commands always produce the same match. That same code will run server-side for online play (Phase 2, Supabase).

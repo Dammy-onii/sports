@@ -1,26 +1,249 @@
 @import "tailwindcss";
 
+/*
+ * Touchline design tokens.
+ * Warm paper, ink-black type, hairlines; pale green for highlights.
+ * Text colours meet WCAG AA (≥4.5:1) on both --bg and --surface.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+  --bg: #f4f3ef;
+  --surface: #fbfaf7;
+  --surface-2: #eceae4;
+  --surface-3: #e2dfd7;
+  --line: #dcd9d2;
+  --line-strong: #c7c3ba;
+  --text: #141414;
+  /* secondary text: 5.0:1 on --bg */
+  --muted: #6b6860;
+  /* tertiary, for large text and decoration only */
+  --faint: #9a968d;
+  --accent: #141414;
+  --accent-ink: #ffffff;
+  --highlight: #cfefd7;
+  --highlight-strong: #a6e0b8;
+  /* status fills (bars, pills, chart marks) */
+  --win: #2f8f57;
+  --draw: #a3a099;
+  --loss: #d9482b;
+  --warn: #c98a12;
+  /* status text (≥4.5:1 on surfaces) */
+  --win-ink: #1f6e41;
+  --draw-ink: #5f5c55;
+  --loss-ink: #b03a20;
+  --warn-ink: #8a5c00;
+  --pitch-a: #cfe6d3;
+  --pitch-b: #c5dec9;
+  --focus: #1f6e41;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-win: var(--win);
+  --color-draw: var(--draw);
+  --color-loss: var(--loss);
+  --color-warn: var(--warn);
+  --color-win-ink: var(--win-ink);
+  --color-draw-ink: var(--draw-ink);
+  --color-loss-ink: var(--loss-ink);
+  --color-warn-ink: var(--warn-ink);
+  --color-highlight: var(--highlight);
+  --color-highlight-strong: var(--highlight-strong);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-display);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: var(--highlight);
+}
+
+/* Visible keyboard focus everywhere */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Editorial serif headings */
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+/* Small mono caps label, like an eyebrow above a heading */
+.eyebrow {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Highlighter band behind the lower part of the text; wraps across lines */
+.marker {
+  background: linear-gradient(transparent 46%, var(--highlight) 46%, var(--highlight) 96%, transparent 96%);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  padding: 0 0.12em;
+}
+
+/* Data tables */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+  text-align: left;
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 8px 8px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.table tbody tr.row-link {
+  cursor: pointer;
+}
+.table tbody tr.row-link:hover {
+  background: var(--surface-2);
+}
+.table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.table th:first-child,
+.table td:first-child {
+  padding-left: 16px;
+}
+.table th:last-child,
+.table td:last-child {
+  padding-right: 16px;
+}
+
+/* Form controls */
+.input {
+  height: 38px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  padding: 0 10px;
+  font-size: 14px;
+  color: var(--text);
+}
+.input:focus {
+  outline: none;
+  border-color: var(--text);
+}
+select.input {
+  padding-right: 28px;
+}
+
+/* Range input styled to the theme */
+input[type="range"].slider {
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  outline: none;
+}
+input[type="range"].slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 3px solid var(--surface);
+  cursor: pointer;
+}
+input[type="range"].slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 3px solid var(--surface);
+  cursor: pointer;
+}
+
+@keyframes pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-pop {
+  animation: pop 0.45s ease-out both;
+}
+
+@keyframes rise {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-rise {
+  animation: rise 0.22s ease-out both;
+}
+
+@keyframes fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade {
+  animation: fade 0.18s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pop,
+  .animate-rise,
+  .animate-fade {
+    animation: none;
+  }
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
