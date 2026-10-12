@@ -1,6 +1,6 @@
 # Competitive review: Touchline vs the best football management games
 
-Compared against **Football Manager** (PC/console and Mobile/Touch), **Top Eleven** (social, real-time online), **Hattrick** (browser, slow-burn, community) and **Online Soccer Manager (OSM)**. The scope is the current build: Phases 1 and 1.5.
+Compared against **Football Manager** (PC/console and Mobile/Touch), **Top Eleven** (social, real-time online), **Hattrick** (browser, slow-burn, community) and **Online Soccer Manager (OSM)**. This is a historical review of Phases 1 and 1.5. Many gaps below have since been implemented in Phases 1.6, D1 and D2; use [ROADMAP.md](./ROADMAP.md) for current status.
 
 ## Where Touchline already stands out
 
@@ -10,7 +10,7 @@ Compared against **Football Manager** (PC/console and Mobile/Touch), **Top Eleve
 | Deterministic engine: resume, replay, look-ahead highlights | Cheap replays and shareable matches. This becomes the backbone of fair online play. |
 | Fully offline PWA, no pay-to-win | Top Eleven and OSM are widely criticised for paid boosts. This is our positioning. |
 | Hot-seat head-to-head, in-save editor | FM supports several managers in one save, but not a quick "pass the device" friendly. |
-| Fast sessions (a match in about 6 minutes, highlights in about 1) | Closer to FM Mobile and Top Eleven than to full FM, which suits a social game. |
+| Fast sessions (full-match active playback now has 5 min to 1 min 40 sec presets; highlights are shorter) | Closer to FM Mobile and Top Eleven than to full FM, which suits a social game. |
 
 ## Gameplay gaps
 

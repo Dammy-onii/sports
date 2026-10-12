@@ -9,6 +9,9 @@ import type { MatchPrepFocus, OppInstruction, Player } from "@/game/types";
 import { updateSave, useCareer } from "@/lib/store/save-store";
 import { toast } from "../overlay";
 import { PlayerLink } from "../PlayerParts";
+import { TrainingTiming } from "../TrainingTiming";
+import { MatchTrainingTimer, useTrainingClock } from "../MatchTrainingTimer";
+import { selectMatchPrep } from "@/game/training-session";
 import { Button, ButtonLink, Card, Crest, Empty, FormPills, Meter, PageHeader, Panel, PosBadge, StatTile, Tag, cn } from "../ui";
 
 const FOCUS: { value: MatchPrepFocus; label: string; blurb: string }[] = [
@@ -22,6 +25,7 @@ const FOCUS: { value: MatchPrepFocus; label: string; blurb: string }[] = [
 /** Prepare for the next match: study them, plan for them, train for them. */
 export function PrepScreen() {
   const save = useCareer();
+  const now = useTrainingClock();
   const report = oppositionReport(save);
   const readiness = squadReadiness(save);
   if (!report) {
@@ -40,6 +44,7 @@ export function PrepScreen() {
       else delete d.prep.opposition[playerId];
     });
   const focus = save.training.matchPrep ?? "none";
+  const selectedFocus = FOCUS.find((f) => f.value === focus)!;
 
   return (
     <div>
@@ -200,17 +205,31 @@ export function PrepScreen() {
 
           <Panel title="Match training" subtitle="This week's sessions before the game. Any match prep costs about a fifth of the week's development.">
             <div className="flex flex-col gap-2 px-4 pb-4">
+              <TrainingTiming save={save} />
+              <MatchTrainingTimer save={save} now={now} />
               {FOCUS.map((f) => (
                 <button
                   key={f.value}
                   aria-pressed={focus === f.value}
-                  onClick={() => updateSave((d) => void (d.training.matchPrep = f.value))}
+                  onClick={() => updateSave((d) => selectMatchPrep(d, f.value))}
                   className={cn("rounded-md border px-3 py-2 text-left", focus === f.value ? "border-text bg-highlight" : "border-line hover:border-text")}
                 >
                   <span className="block text-sm font-semibold">{f.label}</span>
                   <span className="block text-xs text-muted">{f.blurb}</span>
                 </button>
               ))}
+              <div className="mt-2 rounded-lg border border-line bg-surface-2 p-3 text-sm" aria-live="polite">
+                <p className="font-semibold">Selected plan · {selectedFocus.label}</p>
+                {save.liveMatch?.fixtureId === report.fixture.id && <p className="mt-2 text-xs text-muted">This match has already kicked off. Changing the plan now affects weekly training and future matches; its current match bonuses were frozen at kickoff.</p>}
+                <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-xs">
+                  <dt className="text-muted">Duration</dt><dd>60 seconds of real time for the drill. Start a fresh drill each career week.</dd>
+                  <dt className="text-muted">Who trains</dt><dd>Your available squad. Injured players recover instead.</dd>
+                  <dt className="text-muted">Next match</dt><dd>{report.opponent.name} · Week {save.calendarIndex + 1}. Only a completed drill supplies match bonuses at kickoff.</dd>
+                  <dt className="text-muted">Development cost</dt><dd>{focus === "none" ? "None — full development time." : "20% less attribute growth this week. Fitness recovery still runs."}</dd>
+                  <dt className="text-muted">Training effect</dt><dd>{focus === "familiarity" ? "Extra formation, instruction and role familiarity at the weekly update; the amount depends on coaching and existing familiarity." : focus === "opposition" ? "Analysis quality gains up to 5 points now, opposition instructions are 30% more effective in the match, and scouting knowledge of their XI increases after the match." : selectedFocus.blurb}</dd>
+                  <dt className="text-muted">When it updates</dt><dd>Preparation becomes ready when the timer ends. Its match bonuses are frozen at kickoff; development and learned familiarity are recorded when the week ends.</dd>
+                </dl>
+              </div>
             </div>
           </Panel>
 

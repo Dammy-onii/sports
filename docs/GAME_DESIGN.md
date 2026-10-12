@@ -3,7 +3,7 @@
 > A social football club management game. You don't play the match, you *manage* it:
 > build a club, develop players, out-think rival managers, and win trophies.
 
-Status: living document. Decisions are logged in [ROADMAP.md](./ROADMAP.md#decision-log).
+Status: living document. Offline career, quick match and local head-to-head are implemented; online modes, social features and monetisation below describe future direction. Current controls are explained in [PLAYING_GUIDE.md](./PLAYING_GUIDE.md). Decisions are logged in [ROADMAP.md](./ROADMAP.md#decision-log).
 
 ---
 
@@ -47,7 +47,7 @@ Status: living document. Decisions are logged in [ROADMAP.md](./ROADMAP.md#decis
 
 - **Identity:** name, short name, colours, crest (template + colours), stadium name. All editable.
 - **Squad:** 22–30 players. First team + youth academy (Phase 3).
-- **Staff:** assistant, coaches by area, goalkeeping coach, fitness coach, data analyst, youth coach, scout, physio.
+- **Staff:** assistant, coaches by area, goalkeeping coach, fitness coach, data analyst, youth coach, scout, physio. Fitness coaches expose Physical coaching and Recovery skills alongside overall rating, wages, replacement cost and recorded work history. Physical supplements the general coach; Recovery restores ordinary fitness. The physio handles injury risk/returns. History records appointments and adds no performance bonus.
 - **Stadium:** capacity, ticket price and expansions. Attendance depends on reputation, form, position, opponent, derbies, price and the supporters' mood.
 - **Finances:** balance, wage budget and a separate seasonal transfer budget (which can be rebalanced). Income comes from gate receipts (attendance × price), TV, sponsors and prize money; costs are wages, staff, operations and facilities. You can make requests to the board.
 - **Calendar:** four pre-season weeks (friendlies, training camp, rest), two international breaks, and match sharpness separate from fitness.
@@ -89,7 +89,7 @@ Personality is hidden for other clubs' players until scouted, and always known f
 Plus hidden or semi-hidden values:
 
 - **Potential (1–200 ability scale):** the ceiling. Shown as a star range: your scouts' knowledge for other clubs' players, your coach's judgement for your own.
-- **Current Ability:** a weighted sum of attributes for the player's best position. Displayed as an **Overall (1–99)**.
+- **Current Ability:** a weighted sum of attributes for the player's natural position. Displayed as an **Overall (1–99)**.
 - **Age curve:** fast growth from 16 to 21, slowing from 22 to 26, a plateau from 27 to 30, then decline: physical attributes from 29, technical from 31, mental from 33 (goalkeepers three years later).
 - **State:** fitness (0–100), morale (0–100), sharpness, injury (weeks out), form (average of the last 5 ratings).
 - **Positions:** GK, CB, LB, RB, DM, CM, AM, LM, RM, LW, RW, ST, each with a familiarity level.
@@ -100,6 +100,8 @@ Plus hidden or semi-hidden values:
 - **In-match emotions:** confidence, nerves and frustration change during a match with events and personality, and they change how a player plays (DEPTH_PLAN §6).
 
 ### Training
+
+Training and player profiles show progress toward the next OVR point, using current ability between OVR rounding boundaries. This updates after a career week, can fall during decline and resets on an OVR increase. Player → Attributes shows fractional attribute changes from the season baseline, focused-attribute progress and the next weekly update. Match training shows the selected plan’s duration, cost and effect timing. Position retraining has its own percentage bar and an estimated number of healthy training weeks remaining. Ability and attribute progress measure development. Match preparation separately uses a saved 60-second real-time drill; bonuses are ready at completion and frozen into the match setup.
 
 - Weekly **team focus**: Balanced / Attacking / Defending / Physical / Technical / Tactical (each one boosts a different attribute group).
 - **Intensity**: Light / Normal / Intense. Higher intensity means faster growth, but more fatigue and injury risk.
@@ -151,8 +153,8 @@ Plus hidden or semi-hidden values:
 | Fatigue | Stamina, distance covered, pressing |
 | Daily form | Team form plus each player's consistency |
 
-- **Presentation:** a **2D top-down pitch** with tokens, plus tabbed **commentary** and **live stats** panels. Playback speed runs from 1× to 32×, with skip to the end.
-- **Replays:** stored as `seed + inputs + engine version`, not as frames, so they are cheap to share and re-render anywhere.
+- **Presentation:** a **2D top-down pitch** with shirt numbers, optional name labels, selectable player summaries and an on-ball identity strip, plus tabbed **commentary**, **live stats**, **ratings** and **tactics**. One steady playback pace maps 90 regulation minutes to seven real minutes, using normal-speed player and ball animation, with independent 30/60 fps render targets, highlights and skip to end. Stoppage, pauses and celebrations add time; hidden tabs pause progression. Frame-rate targets depend on device performance.
+- **Resume:** career matches store a frozen setup, seed, command log and tick. General shareable replays/clips and preserving old engine implementations are planned.
 
 ## 8. Transfers & economy
 

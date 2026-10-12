@@ -10,6 +10,7 @@ import type { SaveGame } from "@/game/save";
 import { askingPrice, buyPlayer, loanIn, renewContract, signingDemand, userInterest, type BuyResult } from "@/game/transfers";
 import type { Attributes, Player, Position } from "@/game/types";
 import { act } from "@/lib/store/save-store";
+import { Slider } from "./Slider";
 import { Dialog, toast } from "./overlay";
 import { Button, Field, Stars, Tag } from "./ui";
 
@@ -249,9 +250,7 @@ export function LoanDialog({ save, p, open, onClose }: { save: SaveGame; p: Play
         </>
       }
     >
-      <Field label={`Wages you pay: ${share}% (${formatMoney((p.contract.wage * share) / 100)}/wk)`}>
-        <input type="range" className="slider w-full" min={25} max={100} step={5} value={share} onChange={(e) => setShare(Number(e.target.value))} />
-      </Field>
+      <Slider label="Wage contribution" value={share} min={25} max={100} step={5} onChange={setShare} valueText={`${share}% · ${formatMoney((p.contract.wage * share) / 100)}/wk`} low="25%" high="100%" hint="The share of this player's weekly wages your club pays during the loan." />
       {msg && <p className="mt-3 rounded-md bg-surface-2 px-3 py-2 text-sm">{msg}</p>}
     </Dialog>
   );

@@ -29,7 +29,7 @@ export interface TrainingReport {
 export interface TrainingContext extends Omit<DevContext, "focus" | "intensity" | "matchPrep"> {
   /** Physio rating 1–20: training injuries and recovery. */
   physio: number;
-  /** Fitness coach rating (1–20), if any: better recovery. */
+  /** Fitness coach Recovery skill (1–20), if any: better recovery. */
   fitnessCoach?: number;
 }
 

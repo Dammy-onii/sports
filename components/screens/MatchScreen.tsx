@@ -10,10 +10,14 @@ import type { SaveGame } from "@/game/save";
 import { completeRoundAsync } from "@/lib/sim/client";
 import { setSave, updateSave, useSave } from "@/lib/store/save-store";
 import { MatchViewer } from "../match/MatchViewer";
-import { ButtonLink } from "../ui";
+import { Button, ButtonLink } from "../ui";
+import { MatchTrainingTimer, useTrainingClock } from "../MatchTrainingTimer";
+import { prepSessionProgress } from "@/game/training-session";
 
 export function MatchScreen() {
   const save = useSave();
+  const now = useTrainingClock();
+  const [skipPrepFor, setSkipPrepFor] = useState<string | null>(null);
   if (save === undefined) return <div className="flex flex-1 items-center justify-center text-sm text-muted">Loading…</div>;
   if (save === null)
     return (
@@ -25,6 +29,15 @@ export function MatchScreen() {
   // Next.js keeps visited pages alive (React <Activity>), so key by fixture:
   // a new matchday mounts a fresh match instead of restoring the last one.
   const fixture = userFixture(save);
+  const preparation = prepSessionProgress(save.training, save.calendarIndex, now, save.leagues[0].season);
+  if (fixture && !save.liveMatch && save.training.matchPrep && save.training.matchPrep !== "none" && !preparation.ready && skipPrepFor !== fixture.id) {
+    return <main className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center gap-4 p-6">
+      <h1 className="font-display text-3xl">Match training is in progress</h1>
+      <MatchTrainingTimer save={save} now={now} />
+      <p className="text-sm text-muted">When your drill finishes, the match will be ready to start with its preparation bonuses.</p>
+      <div className="flex flex-wrap gap-2"><ButtonLink href="/prep">Change preparation</ButtonLink><Button onClick={() => setSkipPrepFor(fixture.id)}>Play now without prep bonuses</Button></div>
+    </main>;
+  }
   return <CareerMatch key={fixture?.id ?? "none"} save={save} />;
 }
 

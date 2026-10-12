@@ -11,6 +11,7 @@ import { autoStatuses } from "./squad";
 import { defaultStadium } from "./club";
 import { hashManager } from "./managers";
 import { currentAbility } from "./ratings";
+import { appointStaff } from "./staff";
 import type { Club, League, Player } from "./types";
 
 /** Deterministic traits for players created before traits existed. */
@@ -72,6 +73,18 @@ export function migrateSave(input: any): SaveGame | null {
 
   // older worlds could give two clubs the same short name; harmless to re-run
   if (save.clubs) dedupeShortNames(save.clubs);
+  // Optional presentation/staff fields are additive to v9. Preserve old coach effects.
+  for (const club of Object.values(save.clubs ?? {}) as Club[]) {
+    for (const member of Object.values(club.staff ?? {})) {
+      if (!member) continue;
+      if (member.role === "fitnessCoach") member.skills = { physical: member.rating, recovery: member.rating, ...member.skills };
+      if (!member.history?.length) appointStaff(member, club, save.leagues?.[0]?.season ?? 1, (save.calendarIndex ?? 0) + 1);
+    }
+  }
+  for (const member of save.staffMarket ?? []) {
+    member.history ??= [];
+    if (member.role === "fitnessCoach") member.skills = { physical: member.rating, recovery: member.rating, ...member.skills };
+  }
   return save as SaveGame;
 }
 

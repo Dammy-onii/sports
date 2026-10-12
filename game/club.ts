@@ -1,5 +1,6 @@
 import { currentSeason } from "./career";
 import { staffRating } from "./economy";
+import { appointStaff, endStaffAppointment } from "./staff";
 import type { SaveGame, ScoutAssignment } from "./save";
 import type { Club, Stadium, StaffRole } from "./types";
 
@@ -30,11 +31,14 @@ export function hireStaff(save: SaveGame, staffId: string): Result {
   const severance = current ? current.wage * STAFF_SEVERANCE_WEEKS : 0;
   if (club.balance < fee + severance) return { ok: false, reason: "You can't afford the signing-on fee." };
   if (current) {
+    appointStaff(current, club, currentSeason(save), save.calendarIndex + 1);
+    endStaffAppointment(current, currentSeason(save), save.calendarIndex + 1);
     charge(save, `Compensation: ${current.name}`, severance);
     save.staffMarket.push(current);
   }
   charge(save, `Staff signing: ${s.name}`, fee);
   club.staff[s.role] = s;
+  appointStaff(s, club, currentSeason(save), save.calendarIndex + 1);
   save.staffMarket = save.staffMarket.filter((x) => x.id !== s.id);
   return { ok: true };
 }
@@ -43,6 +47,8 @@ export function fireStaff(save: SaveGame, role: StaffRole): Result {
   const club = save.clubs[save.userClubId];
   const current = club.staff[role];
   if (!current) return { ok: false, reason: "Nobody in that role." };
+  appointStaff(current, club, currentSeason(save), save.calendarIndex + 1);
+  endStaffAppointment(current, currentSeason(save), save.calendarIndex + 1);
   charge(save, `Compensation: ${current.name}`, current.wage * STAFF_SEVERANCE_WEEKS);
   delete club.staff[role];
   save.staffMarket.push(current);

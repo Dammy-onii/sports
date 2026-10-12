@@ -7,6 +7,7 @@ import { generateManager } from "./managers";
 import { Rng, hashString } from "./rng";
 import type { SeasonStats, Attributes, Traits, Club, ClubColors, CrestDesign, FormationId, League, Player, Position } from "./types";
 import { roundRobin } from "./competition";
+import { appointStaff } from "./staff";
 
 // Entirely fictional name pools, grouped loosely by "region" for flavour.
 const NAME_POOLS: { nat: string; first: string[]; last: string[] }[] = [
@@ -400,6 +401,7 @@ export function generateClub(
     familiarity: initialFamiliarity(formation, DEFAULT_INSTRUCTIONS),
   };
   club.familiarity = initialFamiliarity(formation, club.tactics.instructions, opts.isUser ? 75 : rng.int(78, 92));
+  for (const member of Object.values(club.staff)) if (member) appointStaff(member, club, 1, 1);
   if (!opts.isUser) {
     club.manager = generateManager(rng, opts.reputation, 1, formation);
     // he has drilled his other formations too, a little less

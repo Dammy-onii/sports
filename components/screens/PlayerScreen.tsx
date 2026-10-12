@@ -16,6 +16,9 @@ import { act, updateSave, useCareer } from "@/lib/store/save-store";
 import { Radar, PositionMap, Sparkline } from "../charts";
 import { toast } from "../overlay";
 import { TalkDialog } from "../TalkDialog";
+import { TrainingProgress } from "../TrainingProgress";
+import { TrainingTiming } from "../TrainingTiming";
+import { IndividualTrainingProgress } from "../IndividualTrainingProgress";
 import { ALL_POSITIONS, BidDialog, LoanDialog, PotentialStars, RADAR_AXES, RenewDialog, SeasonSheet, radarValues } from "../PlayerParts";
 import { AttrBar, Button, ButtonLink, Card, Crest, Empty, Field, Meter, OvrChip, Panel, PosBadge, Tabs, Tag, attrTextColor, cn } from "../ui";
 
@@ -189,6 +192,8 @@ export function PlayerScreen() {
 
       <Tabs value={tab} onChange={setTab} options={tabs} className="mb-4" />
 
+      {mine && tab === "attributes" && <PlayerTrainingSummary p={p} />}
+
       {tab === "overview" && <Overview p={p} k={k} mine={mine} />}
       {tab === "attributes" && <Attributes p={p} k={k} start={mine ? save.dev[p.id]?.start : undefined} />}
       {tab === "career" && <CareerTab p={p} />}
@@ -210,6 +215,29 @@ export function PlayerScreen() {
       {dialog === "loan" && <LoanDialog save={save} p={p} open onClose={() => setDialog(null)} />}
       {dialog === "talk" && <TalkDialog player={p} open onClose={() => setDialog(null)} />}
     </div>
+  );
+}
+
+function PlayerTrainingSummary({ p }: { p: Player }) {
+  const save = useCareer();
+  const log = save.dev[p.id];
+  const changes = log ? (Object.keys(p.attributes) as AttributeKey[])
+    .map((key) => ({ key, gain: p.attributes[key] - log.start[key] }))
+    .filter(({ gain }) => Math.abs(gain) >= 0.005)
+    .sort((a, b) => b.gain - a.gain) : [];
+  const abilityChange = log ? currentAbility(p) - log.startCA : 0;
+  return (
+    <Panel title="Training progress & improvements" subtitle="Actual development since the season baseline; small gains count before ratings round up." className="mb-4">
+      <div className="flex flex-col gap-4 px-4 pb-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TrainingProgress player={p} />
+          <p className="text-sm">Ability this season <strong className={cn("tabular", abilityChange >= 0 ? "text-win-ink" : "text-loss-ink")}>{abilityChange >= 0 ? "+" : ""}{abilityChange.toFixed(2)}</strong> / 200<br /><span className="text-xs text-muted">The OVR bar measures a rating threshold, not the completion of a training session.</span></p>
+        </div>
+        {changes.length ? <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">{changes.map(({ key, gain }) => <div key={key} className="flex justify-between gap-2 rounded-md bg-surface-2 px-3 py-2 text-xs"><span>{ATTRIBUTE_LABELS[key]}</span><strong className={cn("tabular", gain > 0 ? "text-win-ink" : "text-loss-ink")}>{gain > 0 ? "+" : ""}{gain.toFixed(2)}</strong></div>)}</div> : <p className="text-xs text-muted">No recorded attribute changes yet. Your next weekly update will show gains here; growth depends on age, coaching, playing time and room to improve.</p>}
+        {p.focus && <IndividualTrainingProgress player={p} start={log?.start} />}
+        <TrainingTiming save={save} />
+      </div>
+    </Panel>
   );
 }
 
@@ -459,6 +487,9 @@ function Development({ p }: { p: Player }) {
                 ))}
             </select>
           </Field>
+          <IndividualTrainingProgress player={p} start={save.dev[p.id]?.start} />
+          <p className="mt-3 text-xs text-muted">Repeats every career week. Gains are applied when you complete the matchday or advance the week.</p>
+          <details className="mt-3 text-xs text-muted"><summary className="cursor-pointer font-semibold">What determines training progress?</summary><p className="mt-2">Individual focus weights its trainable attributes ×2.5; attribute focus weights one attribute ×4; team focus weights its group ×2. Growth also depends on age, coaching, facilities, professionalism, determination, ambition, recent matches and room to improve. Intensity and match preparation change the available development time. The focus bar uses the group&apos;s average; an attribute bar uses that attribute&apos;s decimal value. These measure improvement, not elapsed time.</p></details>
         </div>
       </Panel>
       <Panel title="Attribute focus" subtitle="One trainable attribute worked on hardest (×4)">
@@ -479,6 +510,11 @@ function Development({ p }: { p: Player }) {
               ))}
             </select>
           </Field>
+          {p.focusAttr && <div className="mt-3">
+            <div className="mb-1 flex justify-between text-xs"><span>{ATTRIBUTE_LABELS[p.focusAttr]} · {p.attributes[p.focusAttr].toFixed(2)} / 20</span><span>{p.attributes[p.focusAttr] >= 20 ? 100 : Math.floor((p.attributes[p.focusAttr] % 1) * 100)}%</span></div>
+            <Meter value={p.attributes[p.focusAttr] >= 20 ? 100 : (p.attributes[p.focusAttr] % 1) * 100} label="Focused attribute progress to the next whole point" />
+            <p className="mt-1 text-xs text-muted">{p.attributes[p.focusAttr] >= 20 ? "Maximum attribute reached." : `Toward ${Math.floor(p.attributes[p.focusAttr]) + 1} / 20. Percentage = the decimal part × 100; for example 8.75 gives 75% toward 9. Focus weights this attribute ×4, with gains applied weekly.`}</p>
+          </div>}
         </div>
       </Panel>
       <Panel title="Learn a position" subtitle="Young, intelligent players learn fastest">
@@ -504,6 +540,7 @@ function Development({ p }: { p: Player }) {
                 <span>{Math.round(p.retrain.progress)}%</span>
               </div>
               <Meter value={p.retrain.progress} label="Retraining progress" />
+              <p className="mt-2 text-xs text-muted">About {Math.ceil((100 - p.retrain.progress) / (5 + p.attributes.decisions / 4 + (p.age <= 23 ? 3 : 0)))} training weeks remaining{p.injuryWeeks > 0 ? ` after injury recovery (${p.injuryWeeks} weeks currently)` : ""}. Progress updates at the end of each week; reaching 100% adds {p.retrain.pos}.</p>
             </div>
           )}
         </div>
@@ -520,6 +557,7 @@ function Development({ p }: { p: Player }) {
               ))}
             </select>
           </Field>
+          <p className="mt-3 text-xs text-muted">Weekly, ongoing while assigned. Eligible players learn from their mentor at each weekly update; this has no fixed completion date.</p>
         </div>
       </Panel>
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { commentaryFor, KEY_EVENTS } from "@/game/commentary";
 import { FORMATION_IDS, INSTRUCTION_LABELS } from "@/game/constants";
 import { replayLiveMatch } from "@/game/career";
@@ -11,17 +11,14 @@ import type { RoleId, ShoutId, TalkTone } from "@/game/roles";
 import type { Position, TeamInstructions } from "@/game/types";
 import { Button, Crest, Segmented, cn } from "../ui";
 import { highlightWindows } from "@/game/highlights";
-import { drawPitch, resolveKits } from "./drawPitch";
+import { drawPitch, pitchPlayerAt, resolveKits } from "./drawPitch";
 import { AssistantCard, LiveAnnouncer, MatchTimeline, OppositionPicker, RolePicker, ShoutBar, TeamTalk } from "./MatchPanels";
+import { Slider } from "../Slider";
+import { MATCH_PACING, playbackDelta, playbackTicksPerSecond } from "./playback";
+import { createPitchMotion, updatePitchMotion, type PitchMotion } from "./motion";
+import { ROLES } from "@/game/roles";
 import { familiarityLabel, formationFamiliarity } from "@/game/familiarity";
 
-const SPEEDS = [
-  { label: "1×", tps: 8 },
-  { label: "2×", tps: 16 },
-  { label: "4×", tps: 32 },
-  { label: "8×", tps: 64 },
-  { label: "16×", tps: 128 },
-];
 
 type Tab = "commentary" | "stats" | "ratings" | "tactics";
 
@@ -63,7 +60,15 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
     refreshHighlights();
   };
   const [, setFrame] = useState(0);
-  const [speed, setSpeed] = useState(1);
+  const speed = 0;
+  const [fps, setFps] = useState<30 | 60>(60);
+  const [measuredFps, setMeasuredFps] = useState<number | null>(null);
+  const [names, setNames] = useState(true);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [highlightReady, setHighlightReady] = useState(true);
+  const highlightWorker = useRef<Worker | null>(null);
+  const highlightGeneration = useRef({ id: 0 });
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // a fresh match with a human manager waits for the pre-match talk and kick-off
   const [kickedOff, setKickedOff] = useState(() => humanSides.length === 0 || match.tick > 0);
   const [paused, setPaused] = useState(() => !(humanSides.length === 0 || match.tick > 0));
@@ -71,10 +76,15 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
   const [banner, setBanner] = useState<Banner | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const motionRef = useRef<PitchMotion | undefined>(undefined);
   const [mode, setMode] = useState<"full" | "highlights">("full");
   const ctl = useRef({
     paused: !(humanSides.length === 0 || match.tick > 0),
-    tps: SPEEDS[1].tps,
+    tps: playbackTicksPerSecond(MATCH_PACING[0].seconds),
+    fps: 60,
+    names: true,
+    selectedId: null as string | null,
+    highlightReady: true,
     holdUntil: 0,
     highlights: false,
     windows: [] as [number, number][],
@@ -87,16 +97,58 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
   /** Phones: tactics open in a bottom sheet so the pitch stays in view. */
   const [sheet, setSheet] = useState(false);
 
-  /** Look ahead for key moments (only needed in highlights mode). */
-  const refreshHighlights = () => {
-    if (ctl.current.highlights && !isFinished(match)) ctl.current.windows = highlightWindows(match);
-  };
+  /** Look-ahead stays off the animation thread; discard responses to old tactics. */
+  const refreshHighlights = useCallback(() => {
+    const id = ++highlightGeneration.current.id;
+    clearTimeout(highlightTimer.current);
+    if (!ctl.current.highlights || isFinished(match)) return;
+    ctl.current.highlightReady = false;
+    setHighlightReady(false);
+    highlightTimer.current = setTimeout(() => {
+      if (highlightWorker.current) highlightWorker.current.postMessage({ id, state: match });
+      else {
+        ctl.current.windows = highlightWindows(match);
+        ctl.current.highlightReady = true;
+        setHighlightReady(true);
+      }
+    }, 80);
+  }, [match]);
+  useEffect(() => {
+    const generation = highlightGeneration.current;
+    try {
+      const worker = new Worker(new URL("../../lib/sim/highlights.worker.ts", import.meta.url), { type: "module" });
+      highlightWorker.current = worker;
+      worker.onmessage = (event: MessageEvent<{ id: number; windows: [number, number][] | null }>) => {
+        if (event.data.id !== highlightGeneration.current.id) return;
+        ctl.current.windows = event.data.windows ?? highlightWindows(match);
+        ctl.current.highlightReady = true;
+        setHighlightReady(true);
+      };
+      worker.onerror = () => {
+        worker.terminate();
+        highlightWorker.current = null;
+        if (ctl.current.highlights) ctl.current.windows = highlightWindows(match);
+        ctl.current.highlightReady = true;
+        setHighlightReady(true);
+      };
+    } catch { /* Browsers without workers use the existing synchronous look-ahead. */ }
+    if (ctl.current.highlights && !ctl.current.highlightReady) refreshHighlights();
+    return () => {
+      ++generation.id;
+      clearTimeout(highlightTimer.current);
+      highlightWorker.current?.terminate();
+      highlightWorker.current = null;
+    };
+  }, [match, refreshHighlights]);
   const [kits] = useState(() => resolveKits(match));
 
   useEffect(() => {
     ctl.current.paused = paused;
-    ctl.current.tps = SPEEDS[speed].tps;
-  }, [paused, speed]);
+    ctl.current.tps = playbackTicksPerSecond(MATCH_PACING[speed].seconds);
+    ctl.current.fps = fps;
+    ctl.current.names = names;
+    ctl.current.selectedId = selectedId;
+  }, [paused, speed, fps, names, selectedId, match]);
 
   // Simulation + render loop
   useEffect(() => {
@@ -110,7 +162,7 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
     const resize = () => {
       const w = wrap.clientWidth;
       const h = Math.round((w * 68) / 105) + Math.round(w * 0.05 * (68 / 105));
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
       canvas.style.width = `${w}px`;
@@ -131,19 +183,43 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
     let last = performance.now();
     let acc = 0;
     let lastUi = 0;
+    let lastPaint = 0;
+    let measurementStart = last;
+    let paintedFrames = 0;
+    const motion = createPitchMotion(match);
+    const onVisibility = () => { last = performance.now(); acc = 0; if (document.hidden) progressRef.current?.(match); };
+    document.addEventListener("visibilitychange", onVisibility);
+    const readyToAdvance = () => !isFinished(match) && match.phase !== "halftime";
+    const stopForChanges = () => {
+      const c = ctl.current;
+      c.stopAtBreak = false;
+      c.paused = true;
+      acc = 0;
+      setStopRequested(false);
+      setStoppedForChanges(true);
+      setPaused(true);
+      setTab("tactics");
+      if (window.innerWidth < 1024) setSheet(true);
+      progressRef.current?.(match);
+    };
     const loop = (now: number) => {
       // tolerate slow / throttled frames without the sim falling far behind
-      const dt = Math.min(0.5, (now - last) / 1000);
+      const dt = playbackDelta(now, last);
       last = now;
       const c = ctl.current;
-      const running = !c.paused && now >= c.holdUntil && !isFinished(match) && match.phase !== "halftime";
+      let motionCut = false;
+      const running = !document.hidden && (!c.highlights || c.highlightReady) && !c.paused && now >= c.holdUntil && !isFinished(match) && match.phase !== "halftime";
       if (running && c.highlights) {
         // jump straight to the next key moment
         const next = c.windows.find((w) => w[1] >= match.tick);
         if (!next || match.tick < next[0]) {
+          motionCut = true;
           const target = next ? next[0] : Infinity;
-          let n = 0;
-          while (match.tick < target && !isFinished(match) && match.phase !== "halftime" && n++ < 1500) stepMatch(match);
+          const budgetStart = performance.now();
+          while (match.tick < target && !isFinished(match) && match.phase !== "halftime" && performance.now() - budgetStart < 4) {
+            stepMatch(match);
+            if (c.stopAtBreak && match.phase === "dead") { stopForChanges(); break; }
+          }
           for (const p of match.players) {
             p.px = p.x;
             p.py = p.y;
@@ -151,12 +227,15 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
           match.ball.px = match.ball.x;
           match.ball.py = match.ball.y;
           acc = 0;
-          progressRef.current?.(match);
+          if (match.tick >= target || isFinished(match) || match.phase === "halftime") progressRef.current?.(match);
         }
       }
-      if (running) {
+      const nextWindow = c.windows.find((w) => w[1] >= match.tick);
+      const jumping = running && c.highlights && (!nextWindow || match.tick < nextWindow[0]);
+      if (running && !c.paused && !jumping && readyToAdvance()) {
         acc += dt * c.tps;
-        while (acc >= 1) {
+        const budgetStart = performance.now();
+        while (acc >= 1 && performance.now() - budgetStart < 5) {
           acc -= 1;
           const before = match.events.length;
           stepMatch(match);
@@ -181,20 +260,27 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
           if (match.tick % 300 === 0) progressRef.current?.(match);
           // requested stoppage: halt when the ball goes dead (throw-in, foul, goal kick…)
           if (c.stopAtBreak && match.phase === "dead") {
-            c.stopAtBreak = false;
-            c.paused = true;
-            acc = 0;
-            setStopRequested(false);
-            setStoppedForChanges(true);
-            setPaused(true);
-            setTab("tactics");
-            if (window.innerWidth < 1024) setSheet(true);
+            stopForChanges();
             break;
           }
         }
       }
       const alpha = running ? Math.min(1, acc) : 1;
-      drawPitch(ctx, size.w, size.h, match, alpha, kits);
+      updatePitchMotion(motion, match, alpha, document.hidden || c.paused ? 0 : dt, motionCut);
+      if (now - lastPaint >= 1000 / c.fps - 0.5) {
+        drawPitch(ctx, size.w, size.h, match, alpha, kits, { names: c.names, selectedId: c.selectedId, motion });
+        // Taps use the last painted positions, including when rendering at 30 fps.
+        motionRef.current = { ...motion, players: new Map(motion.players), ball: { ...motion.ball } };
+        paintedFrames++;
+        const interval = 1000 / c.fps;
+        lastPaint = now - ((now - lastPaint) % interval);
+      }
+      if (document.hidden) { measurementStart = now; paintedFrames = 0; }
+      else if (now - measurementStart >= 1000) {
+        setMeasuredFps(Math.round(paintedFrames * 1000 / (now - measurementStart)));
+        measurementStart = now;
+        paintedFrames = 0;
+      }
       if (now - lastUi > 220) {
         lastUi = now;
         setFrame((f) => f + 1);
@@ -206,6 +292,7 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
       cancelAnimationFrame(raf);
       ro.disconnect();
       window.removeEventListener("pagehide", onHide);
+      document.removeEventListener("visibilitychange", onVisibility);
       // leaving the page: keep the exact position so the match can be resumed
       if (!isFinished(match)) progressRef.current?.(match);
     };
@@ -220,6 +307,8 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
   const [home, away] = match.teams;
   const finished = isFinished(match);
   const halftime = match.phase === "halftime";
+  const selected = match.players.find((p) => p.id === selectedId);
+  const ballCarrier = match.ball.owner === null ? undefined : match.players[match.ball.owner];
   const goals = match.events.filter((e) => e.type === "goal");
 
   function skipToEnd() {
@@ -293,7 +382,11 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
         <div className="flex flex-col gap-2">
           {/* Pitch */}
           <div ref={wrapRef} className="relative overflow-hidden rounded-lg border border-line">
-            <canvas ref={canvasRef} className="block" />
+            <canvas ref={canvasRef} className="block cursor-pointer" role="img" aria-label="Live football pitch. Shirt numbers and player names identify each player. Select a player using the roster below."
+              onClick={(event) => {
+                const bounds = event.currentTarget.getBoundingClientRect();
+                setSelectedId(pitchPlayerAt(match, bounds.width, bounds.height, event.clientX - bounds.left, event.clientY - bounds.top, motionRef.current));
+              }} />
             {banner && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-bg/30">
                 <div key={banner.key} className="animate-pop text-center">
@@ -432,11 +525,7 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
                 {stopRequested ? "Waiting for a break…" : "Sub at next break"}
               </Button>
             )}
-            <Segmented
-              value={String(speed)}
-              onChange={(v) => setSpeed(Number(v))}
-              options={SPEEDS.map((s, i) => ({ value: String(i), label: s.label }))}
-            />
+            <span className="rounded-md border border-line px-3 py-2 text-xs font-semibold">7 minutes · normal pace</span>
             <Segmented
               value={mode}
               onChange={setViewMode}
@@ -449,6 +538,30 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
               Skip to end ⏭
             </Button>
           </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+            <span>90 game minutes = 7 minutes of active playback. Stoppage, pauses and celebrations add time; highlights are shorter.</span>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1.5"><input type="checkbox" checked={names} onChange={(event) => setNames(event.target.checked)} className="accent-black" /> Player names</label>
+              <Segmented value={String(fps)} onChange={(value) => setFps(Number(value) as 30 | 60)} options={[{ value: "30", label: "30 fps" }, { value: "60", label: "60 fps" }]} />
+              <span className="min-w-16 tabular" title="Measured canvas frames per second; the adjacent control sets the target.">{measuredFps === null ? "Measuring…" : `${measuredFps} fps live`}</span>
+            </div>
+          </div>
+          {mode === "highlights" && !highlightReady && <p className="text-xs text-muted" role="status">Preparing highlights…</p>}
+          <div className="rounded-lg border border-line bg-surface px-3 py-2 text-sm" aria-live="off">
+            <span className="text-xs text-muted">On the ball </span>{ballCarrier ? <strong>#{ballCarrier.shirt} {ballCarrier.shortName} · {match.teams[ballCarrier.side].shortName}</strong> : <span className="text-muted">Ball in flight / restart</span>}
+            {selected && <div className="mt-1 border-t border-line pt-1 text-xs">
+              <strong>#{selected.shirt} {selected.shortName}</strong> · {match.teams[selected.side].shortName} · {selected.pos} · {ROLES[selected.role].label}
+              <span className="ml-2 text-muted">Energy {Math.round(selected.energy * 100)}% · {selected.st.passesCompleted}/{selected.st.passes} passes · {selected.st.shots} shots · Rating {playerRating(match, selected).toFixed(1)}{!selected.onPitch ? " · Off the pitch" : ""}</span>
+              <button className="ml-2 underline" onClick={() => setSelectedId(null)}>Clear</button>
+            </div>}
+          </div>
+          <details className="rounded-lg border border-line bg-surface px-3 py-2 text-xs">
+            <summary className="cursor-pointer font-medium">Identify players · tap a name or a player on the pitch</summary>
+            <div className="mt-2 grid grid-cols-2 gap-3">{match.teams.map((team) => <div key={team.side}>
+              <div className="mb-1 font-semibold">{team.name}</div>
+              {team.playerIdx.map((idx) => match.players[idx]).filter((player) => player.onPitch).map((player) => <button key={player.id} aria-pressed={selectedId === player.id} onClick={() => setSelectedId(player.id)} className={cn("block w-full rounded px-2 py-1 text-left", selectedId === player.id ? "bg-highlight" : "hover:bg-surface-2")}><span className="mr-1 font-semibold tabular">#{player.shirt}</span>{player.shortName} <span className="text-muted">· {player.pos}</span></button>)}
+            </div>)}</div>
+          </details>
           {humanSides.map((side) => (
             <ShoutBar key={side} match={match} side={side} disabled={finished} onShout={(shout: ShoutId | null) => command({ type: "shout", side, shout })} />
           ))}
@@ -834,23 +947,9 @@ function TacticsPanel({ match, side, onChange }: { match: MatchState; side: Side
         })}
       </div>
       {(Object.keys(INSTRUCTION_LABELS) as (keyof TeamInstructions)[]).map((k) => (
-        <label key={k} className="block">
-          <div className="mb-1 flex justify-between text-xs">
-            <span>{INSTRUCTION_LABELS[k].label}</span>
-            <span className="text-muted">
-              {team.instructions[k] <= 2 ? INSTRUCTION_LABELS[k].low : team.instructions[k] >= 4 ? INSTRUCTION_LABELS[k].high : "Balanced"}
-            </span>
-          </div>
-          <input
-            type="range"
-            min={1}
-            max={5}
-            value={team.instructions[k]}
-            disabled={finished}
-            onChange={(e) => setInstruction(k, Number(e.target.value))}
-            className="slider w-full"
-          />
-        </label>
+        <Slider key={k} label={INSTRUCTION_LABELS[k].label} min={1} max={5} ticks value={team.instructions[k]} disabled={finished}
+          valueText={`${team.instructions[k]}/5 · ${team.instructions[k] <= 2 ? INSTRUCTION_LABELS[k].low : team.instructions[k] >= 4 ? INSTRUCTION_LABELS[k].high : "Balanced"}`}
+          low={INSTRUCTION_LABELS[k].low} high={INSTRUCTION_LABELS[k].high} onChange={(value) => setInstruction(k, value)} />
       ))}
 
       <details className="group">
@@ -920,7 +1019,7 @@ function TacticsPanel({ match, side, onChange }: { match: MatchState; side: Side
                 )}
               >
                 <span className="text-[10px] text-muted">{p.pos}</span>
-                <span className="truncate">{p.shortName}</span>
+                <span className="truncate"><span className="mr-1 font-semibold tabular">#{p.shirt}</span>{p.shortName}</span>
                 <span className={cn("w-8 rounded px-1 text-center font-bold tabular", ratingColor(r))}>{r.toFixed(1)}</span>
                 <span className={cn("text-right tabular", energyClass(p.energy))}>{Math.round(p.energy * 100)}%</span>
               </button>
@@ -945,7 +1044,7 @@ function TacticsPanel({ match, side, onChange }: { match: MatchState; side: Side
               )}
             >
               <span className="text-[10px] text-muted">{p.naturalPositions[0]}</span>
-              <span className="truncate">{p.shortName}</span>
+              <span className="truncate"><span className="mr-1 font-semibold tabular">#{p.shirt}</span>{p.shortName}</span>
               <span className="w-8 text-center font-bold tabular">{mOverall(p, outgoing ? outgoing.pos : p.naturalPositions[0])}</span>
               <span className={cn("text-right tabular", energyClass(p.energy))}>{Math.round(p.energy * 100)}%</span>
             </button>

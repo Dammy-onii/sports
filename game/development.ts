@@ -318,6 +318,6 @@ export function coachSkills(staff: Partial<Record<StaffRole, StaffMember>> | und
   const skills = Object.fromEntries(COACH_AREAS.map((a) => [a, staffSkill(staff, "coach", a)])) as Record<CoachArea, number>;
   // specialist coaches take over their areas when they're better
   if (staff?.gkCoach) skills.goalkeeping = Math.max(skills.goalkeeping, staff.gkCoach.rating);
-  if (staff?.fitnessCoach) skills.physical = Math.max(skills.physical, staff.fitnessCoach.rating);
+  if (staff?.fitnessCoach) skills.physical = Math.max(skills.physical, staffSkill(staff, "fitnessCoach", "physical"));
   return skills;
 }

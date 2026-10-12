@@ -10,6 +10,7 @@ import { matchSetupFor } from "@/game/setup";
 import { autoPickLineup, isAvailable, remapLineup, repairLineup } from "@/game/tactics";
 import type { Club, Player, Tactics, TeamInstructions } from "@/game/types";
 import { useSave } from "@/lib/store/save-store";
+import { Slider } from "../Slider";
 import { MatchViewer } from "../match/MatchViewer";
 import { Button, Card, CardHeader, Crest, PosBadge, cn } from "../ui";
 
@@ -273,7 +274,7 @@ function TeamPrep({ world, manager, onChange }: { world: World; manager: Manager
                     .sort((x, y) => overall(y, s.pos) - overall(x, s.pos))
                     .map((x) => (
                       <option key={x.id} value={x.id}>
-                        {x.lastName} · {x.positions[0]} · {overall(x, s.pos)}
+                        #{x.shirt} {x.lastName} · {x.positions[0]} · {overall(x, s.pos)}
                       </option>
                     ))}
                 </select>
@@ -287,22 +288,10 @@ function TeamPrep({ world, manager, onChange }: { world: World; manager: Manager
         <CardHeader title="Team instructions" />
         <div className="flex flex-col gap-4 px-4 pb-4">
           {(Object.keys(INSTRUCTION_LABELS) as (keyof TeamInstructions)[]).map((k) => (
-            <label key={k} className="block">
-              <div className="mb-1.5 flex justify-between text-sm">
-                <span>{INSTRUCTION_LABELS[k].label}</span>
-                <span className="text-xs text-muted">
-                  {t.instructions[k] <= 2 ? INSTRUCTION_LABELS[k].low : t.instructions[k] >= 4 ? INSTRUCTION_LABELS[k].high : "Balanced"}
-                </span>
-              </div>
-              <input
-                type="range"
-                min={1}
-                max={5}
-                value={t.instructions[k]}
-                onChange={(e) => onChange({ ...t, instructions: { ...t.instructions, [k]: Number(e.target.value) } })}
-                className="slider w-full"
-              />
-            </label>
+            <Slider key={k} label={INSTRUCTION_LABELS[k].label} min={1} max={5} ticks value={t.instructions[k]}
+              valueText={`${t.instructions[k]}/5 · ${t.instructions[k] <= 2 ? INSTRUCTION_LABELS[k].low : t.instructions[k] >= 4 ? INSTRUCTION_LABELS[k].high : "Balanced"}`}
+              low={INSTRUCTION_LABELS[k].low} high={INSTRUCTION_LABELS[k].high}
+              onChange={(value) => onChange({ ...t, instructions: { ...t.instructions, [k]: value } })} />
           ))}
         </div>
       </Card>

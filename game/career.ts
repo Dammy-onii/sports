@@ -17,6 +17,7 @@ import { matchSetupFor, type UserPrep } from "./setup";
 import { autoStatuses, recordMinutes, weeklyMorale } from "./squad";
 import { autoPickLineup, autoRoles, autoSetPieces, repairLineup } from "./tactics";
 import { trainWeek } from "./training";
+import { activeMatchPrep } from "./training-session";
 import { recordMatch } from "./analytics";
 import { attendance, defaultStadium, seasonTransferBudget, stadiumWeek } from "./club";
 import { CAMP_COST, friendlyFixture, internationalBreak, planFor, summerRust, weeklySharpness } from "./calendar";
@@ -399,7 +400,7 @@ export function fixtureSetup(save: SaveGame, f: Fixture, opts: { allAI?: boolean
   const roundName = slot?.kind === "cup" ? save.cup.rounds[slot.round]?.name : undefined;
   const big = !!userSide && !!sf && !!isBigMatch(save, f, sf.comp, roundName);
   const prep: UserPrep | undefined =
-    userSide !== null ? { side: userSide, opposition: save.prep?.fixtureId === f.id ? save.prep.opposition : {}, focus: save.training.matchPrep } : undefined;
+    userSide !== null ? { side: userSide, opposition: save.prep?.fixtureId === f.id ? save.prep.opposition : {}, focus: activeMatchPrep(save) } : undefined;
   const setup = matchSetupFor(home, away, save.players, {
     homeAI: opts.allAI ? true : undefined,
     awayAI: opts.allAI ? true : undefined,
@@ -455,6 +456,7 @@ export function completeRound(input: SaveGame, userMatch?: MatchState, opts: Rou
     club.tactics = { ...club.tactics, ...picked, roles: autoRoles(save.players, club.tactics.formation, picked.lineup) };
   }
   if (save.delegation.training) delegatedTraining(save);
+  const completedPrep = activeMatchPrep(save);
   // can't name a side: the academy sends up emergency cover
   const userClub = save.clubs[save.userClubId];
   const before = squadOf(save, userClub.id).length;
@@ -672,10 +674,10 @@ export function completeRound(input: SaveGame, userMatch?: MatchState, opts: Rou
       tier: leagueOfClub(save, club.id).tier,
       season,
       youthCoach: club.staff.youthCoach?.rating,
-      fitnessCoach: club.staff.fitnessCoach?.rating,
+      fitnessCoach: club.staff.fitnessCoach ? staffSkill(club.staff, "fitnessCoach", "recovery") : undefined,
     });
     // tactical familiarity: what was played, plus tactical training
-    const tacticalTraining = club.isUser ? (save.training.focus === "tactical" ? 1 : 0) + (save.training.matchPrep === "familiarity" ? 1.5 : 0) + extraTactical : 0.6;
+    const tacticalTraining = club.isUser ? (save.training.focus === "tactical" ? 1 : 0) + (completedPrep === "familiarity" ? 1.5 : 0) + extraTactical : 0.6;
     const mt = matchTactics[club.id];
     weeklyFamiliarity(club.familiarity, save.players, {
       played: mt,
@@ -851,7 +853,7 @@ export function completeRound(input: SaveGame, userMatch?: MatchState, opts: Rou
   // the analysts start work on the next opponent (much more with opposition prep)
   if (next) {
     const oppId = next.fixture.homeId === save.userClubId ? next.fixture.awayId : next.fixture.homeId;
-    const gain = save.training.matchPrep === "opposition" ? 25 : 8;
+    const gain = completedPrep === "opposition" ? 25 : 8;
     for (const p of squadOf(save, oppId)) addKnowledge(save, p.id, gain);
   }
   if (!save.jobOffers && next) {

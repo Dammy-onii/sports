@@ -4,6 +4,7 @@ import { useState } from "react";
 import { askBoard, BOARD_ASKS, defaultStadium, EXPANSIONS, expandStadium, fairPrice, rebalanceBudget, SEAT_COST, setTicketPrice, type BoardAsk } from "@/game/club";
 import { formatMoney } from "@/game/ratings";
 import { act, updateSave, useCareer } from "@/lib/store/save-store";
+import { Slider } from "./Slider";
 import { toast } from "./overlay";
 import { Button, Meter, Panel } from "./ui";
 
@@ -27,14 +28,7 @@ export function ClubOps() {
             </div>
             <Meter value={fill ?? 0} label="Stadium filled" />
           </div>
-          <label className="block">
-            <div className="mb-1 flex justify-between">
-              <span className="text-muted">Ticket price</span>
-              <span className="tabular">£{st.ticketPrice} <span className="text-xs text-muted">(fans think £{fair} is fair)</span></span>
-            </div>
-            <input type="range" className="slider w-full" min={5} max={60} value={st.ticketPrice} onChange={(e) => updateSave((d) => setTicketPrice(d, Number(e.target.value)))} />
-            <p className="mt-1 text-xs text-muted">Higher prices earn more per fan but keep some away. Form, league position, big opponents and derbies bring crowds in.</p>
-          </label>
+          <Slider label="Ticket price" value={st.ticketPrice} min={5} max={60} onChange={(price) => updateSave((d) => setTicketPrice(d, price))} valueText={`£${st.ticketPrice}`} low="£5" high="£60" hint={`Fans think £${fair} is fair. Higher prices earn more per fan but keep some away. Form, league position, big opponents and derbies bring crowds in.`} />
           {!st.expansion && (
             <div className="flex flex-wrap gap-2">
               {EXPANSIONS.map((e) => (
@@ -66,14 +60,8 @@ export function ClubOps() {
             <span className="text-muted">Wage budget</span>
             <span className="font-semibold tabular">{formatMoney(save.board.wageBudget)}/wk</span>
           </div>
-          <label className="block border-t border-line pt-3">
-            <div className="mb-1 flex justify-between text-xs">
-              <span className="text-muted">Move to {shift >= 0 ? "wages" : "transfers"}</span>
-              <span className="tabular">
-                {formatMoney(Math.abs(shift))} {shift >= 0 ? "→" : "←"} {formatMoney(Math.abs(shift) / 40)}/wk
-              </span>
-            </div>
-            <input type="range" className="slider w-full" min={-Math.round(save.board.wageBudget * 0.3 * 40)} max={save.board.transferBudget ?? 0} step={10000} value={shift} onChange={(e) => setShift(Number(e.target.value))} />
+          <div className="border-t border-line pt-3">
+            <Slider label={`Move budget to ${shift >= 0 ? "wages" : "transfers"}`} min={-Math.floor((save.board.wageBudget * 0.3 * 40) / 10000) * 10000} max={Math.floor((save.board.transferBudget ?? 0) / 10000) * 10000} step={10000} value={shift} onChange={setShift} valueText={`${formatMoney(Math.abs(shift))} ↔ ${formatMoney(Math.abs(shift) / 40)}/wk`} low="More transfers" high="More wages" />
             <Button
               size="sm"
               className="mt-2"
@@ -86,7 +74,7 @@ export function ClubOps() {
             >
               Apply
             </Button>
-          </label>
+          </div>
           <p className="text-xs text-muted">Every £40 of transfer budget buys £1 a week of wage room. Half of every sale goes back into the transfer budget.</p>
         </div>
       </Panel>

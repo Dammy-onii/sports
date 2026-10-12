@@ -8,6 +8,10 @@ import { SKILL_LABELS, staffRating } from "@/game/economy";
 import { COACH_AREAS, coachSkills } from "@/game/development";
 import { developmentReport, perceivedPotential, type DevReportLine } from "@/game/progress";
 import type { SaveGame } from "@/game/save";
+import { TrainingProgress } from "../TrainingProgress";
+import { TrainingTiming } from "../TrainingTiming";
+import { MatchTrainingTimer, useTrainingClock } from "../MatchTrainingTimer";
+import { IndividualTrainingProgress } from "../IndividualTrainingProgress";
 import { Sparkline } from "../charts";
 import { currentAbility, overall, traitBand } from "@/game/ratings";
 import type { MatchPrepFocus, Player, Position, TrainingFocus, TrainingIntensity } from "@/game/types";
@@ -35,13 +39,15 @@ type Filter = "all" | "young" | "plans";
 type View = "plan" | "development";
 
 export function TrainingScreen() {
+  const save = useCareer();
   const params = useSearchParams();
   const router = useRouter();
   const view = (params.get("view") as View) || "plan";
   useOnboarding("training");
   return (
     <div>
-      <PageHeader eyebrow="Team" title="Training" subtitle="The team plan runs every week. Individual plans add a personal focus, a new position to learn, or a senior mentor." />
+      <PageHeader eyebrow="Team" title="Training" subtitle="Progress bars show actual ability toward the next OVR point and update each week. Individual plans add a personal focus, a new position to learn, or a senior mentor." />
+      <div className="mb-4"><TrainingTiming save={save} /></div>
       <Tabs
         value={view}
         onChange={(v) => router.replace(v === "plan" ? "/training" : `/training?view=${v}`)}
@@ -58,6 +64,7 @@ export function TrainingScreen() {
 
 function PlanView() {
   const save = useCareer();
+  const now = useTrainingClock();
   const club = save.clubs[save.userClubId];
   const plan = save.training;
   const squad = squadOf(save, club.id);
@@ -99,7 +106,7 @@ function PlanView() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <Card className={cn(delegated && "pointer-events-none opacity-60")}>
-          <CardHeader title="Team focus" subtitle="Attributes in the focus grow about 2.5× faster." />
+          <CardHeader title="Team focus" subtitle="Focus weights these attributes 2×; growth also depends on coaching and age." />
           <div className="grid grid-cols-2 gap-2 px-4 pb-4 sm:grid-cols-3">
             {(Object.keys(TRAINING_FOCUS) as TrainingFocus[]).map((f) => (
               <button key={f} onClick={() => set((d) => (d.focus = f))} aria-pressed={plan.focus === f} className={cn("rounded-md border p-3 text-left transition", plan.focus === f ? "border-text bg-highlight" : "border-line hover:border-text/50")}>
@@ -136,6 +143,7 @@ function PlanView() {
             </div>
             <p className="text-sm">{prep.label}</p>
             <p className="text-xs text-muted">{prep.blurb}</p>
+            <div className="mt-3"><MatchTrainingTimer save={save} now={now} /></div>
           </Card>
           <Card className="p-4">
             <div className="mb-2 text-sm font-semibold">Coaching & facilities</div>
@@ -164,7 +172,7 @@ function PlanView() {
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 pt-3.5 pb-2.5">
           <div>
             <div className="text-sm font-semibold">Individual plans</div>
-            <div className="text-xs text-muted">Personal focus triples growth in those attributes. Young, intelligent players learn new positions fastest. Mentors are 27+ and pass on composure and consistency to players aged 23 or under.</div>
+            <div className="text-xs text-muted">Personal focus weights those attributes 2.5×. Young, intelligent players learn new positions fastest. Mentors are 27+ and pass on composure and consistency to players aged 23 or under.</div>
           </div>
           <Segmented
             value={filter}
@@ -186,6 +194,7 @@ function PlanView() {
                 <th className="num">OVR</th>
                 <th>Pot.</th>
                 <th className="num">Fit</th>
+                <th className="hidden md:table-cell">Training progress</th>
                 <th>Personal focus</th>
                 <th>Learn position</th>
                 <th>Mentor</th>
@@ -197,7 +206,7 @@ function PlanView() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="py-6 text-center text-muted">
+                  <td colSpan={10} className="py-6 text-center text-muted">
                     Nobody here yet.
                   </td>
                 </tr>
@@ -237,6 +246,7 @@ function PlanRow({ p, squad }: { p: Player; squad: Player[] }) {
       </td>
       <td className="whitespace-nowrap">
         <PlayerLink p={p} />
+        <div className="mt-1 md:hidden"><TrainingProgress player={p} /></div>
         {p.injuryWeeks > 0 && <span className="ml-1 text-[10px] text-loss-ink">INJ</span>}
       </td>
       <td className="num">{p.age}</td>
@@ -247,6 +257,7 @@ function PlanRow({ p, squad }: { p: Player; squad: Player[] }) {
         <PotentialStars save={save} p={p} />
       </td>
       <td className={cn("num", p.fitness < 75 && "text-loss-ink")}>{Math.round(p.fitness)}%</td>
+      <td className="hidden md:table-cell"><TrainingProgress player={p} /></td>
       <td>
         <select className="input h-8 w-36 py-0 text-xs" aria-label={`Personal focus for ${p.lastName}`} value={p.focus ?? ""} onChange={(e) => set((d) => void (d.focus = (e.target.value || undefined) as TrainingFocus | undefined))}>
           <option value="">None</option>
@@ -258,6 +269,7 @@ function PlanRow({ p, squad }: { p: Player; squad: Player[] }) {
               </option>
             ))}
         </select>
+        {p.focus && <IndividualTrainingProgress player={p} compact />}
       </td>
       <td>
         <div className="flex items-center gap-2">
@@ -274,7 +286,7 @@ function PlanRow({ p, squad }: { p: Player; squad: Player[] }) {
               </option>
             ))}
           </select>
-          {p.retrain && <span className="text-[11px] text-muted tabular">{Math.round(p.retrain.progress)}%</span>}
+          {p.retrain && <div className="w-20"><Meter value={p.retrain.progress} label={`${p.lastName}: learning ${p.retrain.pos}`} /><span className="text-[11px] text-muted tabular">{Math.round(p.retrain.progress)}% learned</span></div>}
         </div>
       </td>
       <td>
@@ -344,6 +356,7 @@ function DevelopmentView() {
               <th>Potential</th>
               <th className="num">Season</th>
               <th className="num">4 wks</th>
+              <th className="hidden md:table-cell">Next OVR</th>
               <th>Trend</th>
               <th>Professionalism</th>
               <th>Coach says</th>
@@ -361,6 +374,7 @@ function DevelopmentView() {
                   </td>
                   <td className="whitespace-nowrap">
                     <PlayerLink p={p} />
+                    <div className="mt-1 md:hidden"><TrainingProgress player={p} /></div>
                   </td>
                   <td className="num">{p.age}</td>
                   <td className="num">
@@ -371,6 +385,7 @@ function DevelopmentView() {
                   </td>
                   <td className={cn("num tabular", sc > 0.5 ? "text-win-ink" : sc < -0.5 ? "text-loss-ink" : "text-muted")}>{sc > 0 ? "+" : ""}{sc.toFixed(1)}</td>
                   <td className={cn("num tabular", (l?.change ?? 0) > 0.3 ? "text-win-ink" : (l?.change ?? 0) < -0.3 ? "text-loss-ink" : "text-muted")}>{l ? `${l.change > 0 ? "+" : ""}${l.change.toFixed(1)}` : "–"}</td>
+                  <td className="hidden md:table-cell"><TrainingProgress player={p} /></td>
                   <td>{log && log.points.length > 1 ? <Sparkline values={log.points.slice(-16).map((x) => x[1])} width={80} height={22} /> : <span className="text-xs text-muted">–</span>}</td>
                   <td className="text-xs">{traitBand("professionalism", p.traits.professionalism)}</td>
                   <td className="text-xs">

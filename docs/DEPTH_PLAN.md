@@ -3,7 +3,7 @@
 The second competitive review ([COMPETITIVE_REVIEW.md](./COMPETITIVE_REVIEW.md)) found twelve areas where Football Manager is still deeper than Touchline. Each one is designed here as a full mechanic, not a cosmetic version. The work is split into two phases.
 
 - **Phase D1 (done):** match preparation, tactical familiarity and player development, plus the balance problems found in long-run testing (development inflation, money inflation, generous match ratings).
-- **Phase D2 (in progress):** a deeper match engine with 37 attributes and trainability, emotions in matches, AI managers who adapt, squad dynamics and conversations, and the calendar, club, analysis and media layers of the manager game.
+- **Phase D2 (core systems done; remaining gaps below):** a deeper match engine with 37 attributes and trainability, emotions in matches, AI managers who adapt, squad dynamics and conversations, and the calendar, club, analysis and media layers of the manager game.
 - **Phase D3 (later):** contract depth, more competitions, match presentation.
 
 Status key: ✅ done · 🟨 in progress · ⬜ not started
@@ -96,6 +96,8 @@ Over five seasons, the median club's best-XI OVR should stay within ±2 of where
 | 34+ | −2.5 to −7 |
 
 The median best-XI OVR moved from 59.5 to 61.7 (seed 7) and from 58.4 to 61.3 (seed 21), staying between about 60 and 61.5 from season 2. This is close to the ±2 target, with a slight upward creep. Growth at 19–23 ends up below the targets above. That is the price of a stable world: potential is now centred on each club's current standard (generation and youth intake), and the trade-off can be tuned in `game/youth.ts` and `game/development.ts`.
+
+The Training Plan and Development tables now show progress toward the next OVR rounding boundary, based on current ability. It updates weekly and resets on a rating increase; it does not measure hidden potential or guarantee future growth. Player → Attributes contains the improvements summary. The personal-focus bar measures the average of its trainable attributes; attribute-focus progress measures the single attribute’s fractional point. Both update with weekly development. Retraining has a separate percentage bar and estimated remaining training weeks. Match training has a saved 60-second drill countdown and gates preparation bonuses on completion; it also exposes the next fixture, costs and effect timing.
 
 *Code:* `game/development.ts` (model), `game/training.ts` (weekly loop), `game/progress.ts` (log, career history, coach's report, perceived potential), Training → Development and Player → Development / Career in the UI.
 
@@ -357,6 +359,7 @@ Reactions depend on personality, form, status, rapport and how often you've done
 - **Budgets:** the board sets a transfer budget each season, separate from the club balance, alongside the wage budget. You can rebalance between the two.
 - **Board requests:** more transfer or wage budget, facility upgrades paid by the board, stadium expansion, a better youth setup. The answer depends on confidence, finances and how often you've asked. Asking too often costs confidence.
 - **More staff posts:** goalkeeping coach (keeper training), fitness coach (physical training and recovery), data analyst (opposition reports and assistant insight), youth coach (academy development).
+- **Fitness-coach selection:** Physical coaching and Recovery are separate 1–20 skills, with overall rating, wage/upfront cost and real appointment history shown on Staff. Physical coaching uses the better of the fitness specialist and general coach. Recovery changes the weekly fitness-deficit recovery rate by `(skill − 10) × 0.005`, capped with other contributions at 95%. Existing saves retain their old rating-based effects through skill backfills. Work history is recorded from appointments and has no gameplay multiplier; no past employers are invented.
 
 **Measured** (`scripts/longrun.ts`, 5 seasons, seeds 7 and 21): the median club's result each season is between −£0.9m and +£1.0m in both divisions, apart from one −£1.5m season on seed 21. Individual clubs range from −£6m to +£8.5m. The median best-XI OVR goes from 57.6 to 60.3 (seed 7) and from 58.7 to 62.2 (seed 21), the same creep as after Phase D1. *Code:* `game/club.ts` (stadium, budgets, `askBoard`), `game/economy.ts`, `components/ClubOps.tsx`.
 

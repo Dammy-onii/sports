@@ -3,6 +3,7 @@ import { averageForm, currentAbility, overall, potentialStars } from "./ratings"
 import { knowledgeOf, starsRange } from "./scouting";
 import type { SaveGame } from "./save";
 import type { Player } from "./types";
+import { TRAINABILITY, TRAINING_FOCUS } from "./constants";
 
 /**
  * Save-level development bookkeeping: the weekly ability log for the user's
@@ -10,6 +11,21 @@ import type { Player } from "./types";
  */
 
 const MAX_POINTS = 80;
+
+/** Mean trainable attribute in the personal focus, progressing to its next whole level. */
+export function individualTrainingProgress(p: Player) {
+  const keys = p.focus ? TRAINING_FOCUS[p.focus].keys.filter((key) => TRAINABILITY[key] === "trainable") : [];
+  if (!keys.length) return null;
+  const level = keys.reduce((total, key) => total + p.attributes[key], 0) / keys.length;
+  return { keys, level, target: Math.min(20, Math.floor(level) + 1), percent: level >= 20 ? 100 : (level - Math.floor(level)) * 100 };
+}
+
+/** OVR rounds CA / 2 − 1. Two CA points span one OVR band. */
+export function trainingProgress(ability: number, ovr: number): { percent: number; complete: boolean } {
+  if (ovr >= 99) return { percent: 100, complete: true };
+  const lower = ovr * 2 + 1;
+  return { percent: Math.max(0, Math.min(100, ((ability - lower) / 2) * 100)), complete: false };
+}
 
 function weekKey(season: number, week: number) {
   return season * 100 + week;

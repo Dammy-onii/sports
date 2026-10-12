@@ -83,6 +83,7 @@ export function staffWage(rating: number): number {
 export const STAFF_SKILLS: Partial<Record<StaffRole, string[]>> = {
   coach: [...COACH_AREAS, "judging"],
   assistant: ["tactical", "judging", "motivating"],
+  fitnessCoach: ["physical", "recovery"],
 };
 
 export const SKILL_LABELS: Record<string, string> = {
@@ -91,6 +92,7 @@ export const SKILL_LABELS: Record<string, string> = {
   defending: "Defending",
   tactical: "Tactical",
   physical: "Fitness",
+  recovery: "Recovery",
   goalkeeping: "Goalkeeping",
   judging: "Judging potential",
   motivating: "Motivating",
@@ -110,6 +112,7 @@ export function generateStaff(rng: Rng, role: StaffRole, rating: number): StaffM
     role,
     rating: r,
     wage: staffWage(r),
+    history: [],
   });
 }
 

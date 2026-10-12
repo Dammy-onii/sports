@@ -2,6 +2,7 @@ import { leagueOfClub, slotFixtures, userSlotFixture } from "./career";
 import { leagueTable } from "./competition";
 import { FORMATIONS } from "./constants";
 import { staffSkill } from "./development";
+import { activeMatchPrep } from "./training-session";
 import { clubFamiliarity, roleFamiliarity, type FamiliarityBreakdown } from "./familiarity";
 import { hashString } from "./rng";
 import { overall } from "./ratings";
@@ -74,7 +75,7 @@ const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.le
 export function analysisQuality(save: SaveGame): number {
   const club = save.clubs[save.userClubId];
   const q = (staffSkill(club.staff, "assistant", "tactical") + staffSkill(club.staff, "assistant", "judging")) / 2 + (club.staff.analyst ? club.staff.analyst.rating / 4 : 0);
-  return Math.min(20, Math.round(q + (save.training.matchPrep === "opposition" ? 5 : 0)));
+  return Math.min(20, Math.round(q + (activeMatchPrep(save) === "opposition" ? 5 : 0)));
 }
 
 function readInstruction(value: number, quality: number, salt: string): ReportRead {

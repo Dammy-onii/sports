@@ -9,6 +9,7 @@ import { autoPickLineup, autoRoles, autoSetPieces, isAvailable, remapLineup, rep
 import type { CornerRoutine, FormationId, Player, PlayerInstructions, RoleId, Tactics, TeamInstructions } from "@/game/types";
 import { clubFamiliarity, familiarityLabel, formationFamiliarity, instructionFamiliarity, roleFamiliarity } from "@/game/familiarity";
 import { updateSave, useCareer, useOnboarding } from "@/lib/store/save-store";
+import { Slider } from "../Slider";
 import { FamiliarityCard, PlayerInstructionsEditor, piSummary } from "../TacticalParts";
 import { toast } from "../overlay";
 import { PlayerLink } from "../PlayerParts";
@@ -224,7 +225,7 @@ export function TacticsScreen() {
                   onClick={() => clickSlot(i)}
                   {...dragProps(p?.id)}
                   {...dropProps((id) => intoSlot(i, id))}
-                  aria-label={`${s.pos}: ${p ? `${p.firstName} ${p.lastName}, ${ROLES[roles[i]].label}` : "empty"}`}
+                  aria-label={`${s.pos}: ${p ? `#${p.shirt} ${p.firstName} ${p.lastName}, ${ROLES[roles[i]].label}` : "empty"}`}
                   className="absolute flex w-[22%] -translate-x-1/2 translate-y-1/2 cursor-grab flex-col items-center gap-0.5 active:cursor-grabbing"
                   style={{ left: `${8 + s.y * 84}%`, bottom: `${6 + (s.x / 0.68) * 80}%` }}
                 >
@@ -237,9 +238,10 @@ export function TacticsScreen() {
                     )}
                     style={{ background: club.colors.primary, color: club.colors.secondary }}
                   >
-                    {p ? overall(p, s.pos) : "?"}
+                    {p ? p.shirt : "?"}
                   </span>
                   <span className="max-w-full truncate rounded bg-accent px-1.5 text-[10px] font-medium leading-4 text-accent-ink">{p ? p.lastName : "Empty"}</span>
+                  {p && <span className="rounded bg-surface/95 px-1 text-[10px] font-semibold tabular">OVR {overall(p, s.pos)}</span>}
                   <span className="max-w-full truncate rounded bg-surface/85 px-1 text-[9px] font-medium leading-3.5 text-text" title={piSummary(club.tactics.playerInstructions?.[i]) || undefined}>
                     {ROLES[roles[i]].label}
                     {club.tactics.playerInstructions?.[i] && " •"}
@@ -298,19 +300,11 @@ export function TacticsScreen() {
                   const v = instructions[k];
                   const insFam = Math.round((instructionFamiliarity(club.familiarity, instructions)[k] ?? 0) * 100);
                   return (
-                    <label key={k} className="block">
-                      <div className="mb-1.5 flex items-center justify-between text-sm">
-                        <span className="font-medium">{INSTRUCTION_LABELS[k].label}</span>
-                        <span className="text-xs text-muted">
-                          {v <= 2 ? INSTRUCTION_LABELS[k].low : v >= 4 ? INSTRUCTION_LABELS[k].high : "Balanced"}
-                          <span className={cn("ml-2 tabular", insFam < 60 && "text-loss-ink")} title="How well the squad knows this setting">
-                            {insFam}% known
-                          </span>
-                        </span>
-                      </div>
-                      <input type="range" min={1} max={5} step={1} value={v} onChange={(e) => setTactics((t) => void (t.instructions[k] = Number(e.target.value)))} className="slider w-full" />
-                      <p className="mt-1 text-xs text-muted">{EXPLAIN[k][v <= 2 ? 0 : v >= 4 ? 2 : 1]}</p>
-                    </label>
+                    <Slider key={k} label={INSTRUCTION_LABELS[k].label} min={1} max={5} value={v} ticks
+                      valueText={`${v}/5 · ${v <= 2 ? INSTRUCTION_LABELS[k].low : v >= 4 ? INSTRUCTION_LABELS[k].high : "Balanced"}`}
+                      low={INSTRUCTION_LABELS[k].low} high={INSTRUCTION_LABELS[k].high}
+                      hint={`${EXPLAIN[k][v <= 2 ? 0 : v >= 4 ? 2 : 1]} · ${insFam}% familiar`}
+                      onChange={(value) => setTactics((t) => void (t.instructions[k] = value))} />
                   );
                 })}
               </div>
@@ -365,7 +359,7 @@ function SlotPanel({
       title={
         <span className="flex items-center gap-2">
           <PosBadge pos={pos} />
-          {player ? <PlayerLink p={player} /> : "Empty slot"}
+          {player ? <><span className="text-xs text-muted">#{player.shirt}</span><PlayerLink p={player} /></> : "Empty slot"}
           {player && <Ovr value={overall(player, pos)} />}
         </span>
       }
@@ -539,6 +533,7 @@ function PlayerList({
             disabled={!isAvailable(p)}
             className={cn("flex w-full cursor-grab items-center gap-2 border-t border-line/60 px-4 py-2 text-left text-sm hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40", sel?.kind === "player" && sel.id === p.id && "bg-highlight")}
           >
+            <span className="w-7 shrink-0 rounded bg-surface-2 text-center text-xs font-semibold tabular">#{p.shirt}</span>
             <PosBadge pos={p.positions[0]} />
             <span className="flex-1 truncate">
               {p.firstName[0]}. {p.lastName}

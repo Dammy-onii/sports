@@ -60,6 +60,14 @@ Full design and measured results in [DEPTH_PLAN.md](./DEPTH_PLAN.md) §5–12.
 - ✅ Analytics hub (team, league comparison, player percentiles) and Media (press conferences, fans, news, awards)
 - ⬜ International-break friendlies, home/away splits in the UI, league scatter view → Phase D3
 
+## Phase T — Guided first season ⬜
+New players find the game too complicated on the first try. Plan and visual storyboard: https://claude.ai/artifact/QZTCsnPrJQMbTLBLQQWHGU
+- ⬜ Guided mode chosen on the new-career screen: the assistant runs everything except picking the team, and the sidebar starts at 4 items
+- ⬜ Six-step first match: welcome, the big button, reading a player, picking a formation, a match with four timed hints, a three-line report
+- ⬜ One feature unlocked per week (Training wk 2 → Academy & analytics wk 12, plus event-triggered unlocks), each with a card and an "assistant handles it" option
+- ⬜ Guide components: spotlight, pulse, assistant bubble, "What's this?" terms, unlock card, progress strip
+- ⬜ Settings: "Show everything now", "Replay tutorial"
+
 ## Phase D3 — Contracts, competitions, presentation ⬜
 Contract depth (clauses, agents, negotiation rounds), a third division and a continental cup, match replays and clips. See [DEPTH_PLAN.md](./DEPTH_PLAN.md).
 
@@ -112,6 +120,14 @@ Contract depth (clauses, agents, negotiation rounds), a third division and a con
 ## Improvements log
 Ideas and tuning notes found during development. Newest first.
 
+- **2026-10-11 — Training, player identification, staff selection and match presentation.**
+  - ✅ Training Plan/Development OVR bars, Attributes-only improvements summary, visible personal-focus and attribute progress, weekly development timing, saved 60-second match-training drills and estimated position-learning duration. Attribute gains advance weekly; match-preparation readiness advances on its saved timer.
+  - ✅ Larger match shirt numbers, optional name labels, on-ball identity, selectable player detail/roster, and visible shirt numbers throughout tactics.
+  - ✅ Fitness-coach Physical/Recovery skills, comparisons, overall rating and actual appointment history; existing v9 saves preserve previous effects.
+  - ✅ One steady normal pace: 90 regulation minutes take seven real minutes; no speed multipliers. Separate 30/60 fps targets, interpolated and eased movement with normal presentation speeds and gradual acceleration, bounded per-frame work and worker highlight look-ahead. Pauses/celebrations add time; device performance affects actual fps.
+  - ✅ Shared filled-track sliders with value readouts, endpoint labels and keyboard/step controls for tactics, loans, ticket prices and budgets.
+  - ✅ README, architecture and rules refreshed; [Playing guide](./PLAYING_GUIDE.md) explains the controls and coach-selection criteria.
+
 - **2026-10-10 — Phase D2: attributes, emotions, AI managers, dynamics, calendar, clubs, analytics, media.**
   - ✅ Save schema v9 (v8: new attributes derived from the old ones, potential re-anchored; v9: managers, stadiums, budgets, dynamics, media state). In-progress live matches from older saves are dropped.
   - ✅ The long-run script showed every club losing £1.5–2m a season once pre-season and international weeks were added. Operating costs now stop in those weeks; the median club's season result is back within about ±£1m.
@@ -151,7 +167,7 @@ Ideas and tuning notes found during development. Newest first.
   - ⬜ Reds 0.27/match (real ~0.15): trim second-yellow frequency.
 
 - **2026-10-09 — Visual identity.** Light editorial theme: warm paper `#f4f3ef`, ink `#141414`, hairline dividers, black pill buttons, Instrument Serif headings, mono caps labels, pale green `#cfefd7` for highlights (selections, your club's rows, goal banner, headline marker) and a pale-green striped pitch. Club kit colours stay as each club's identity.
-- ⬜ Match length is fixed by playback speed only (1× ≈ 11½ min, 2× default ≈ 6 min). Consider a "real-time" option and remembering the preferred speed per device.
+- ✅ Duration-based playback replaces the old tick-rate labels (2026-10-11). Remembering pace/frame-rate preferences per device remains future work.
 
 - **2026-10-09 — Characteristics drive every event.** Audited every random draw in the engine. Fouls, cards, injuries, offsides, interceptions, corners, blocks, free kicks and corner targets now depend on the players involved (table in GAME_DESIGN §7). New hidden **personality traits** (temperament, injury proneness, consistency) appear on the player profile and as squad badges (Hot-head / Fragile / Erratic). Save schema v4 backfills traits deterministically. Proof, from `npm run calibrate` (400 matches, low ≤7 / mid 8–13 / high ≥14):
 

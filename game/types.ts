@@ -228,7 +228,17 @@ export type StaffRole = "assistant" | "coach" | "scout" | "physio" | "gkCoach" |
 
 /** Areas a coach can be good at (1–20 each). */
 export type CoachArea = "attacking" | "defending" | "technical" | "tactical" | "physical" | "goalkeeping";
-export type StaffSkill = CoachArea | "judging" | "motivating";
+export type StaffSkill = CoachArea | "judging" | "motivating" | "recovery";
+
+export interface StaffAppointment {
+  clubId: string;
+  clubName: string;
+  role: StaffRole;
+  fromSeason: number;
+  fromWeek: number;
+  toSeason?: number;
+  toWeek?: number;
+}
 
 export interface StaffMember {
   id: string;
@@ -240,6 +250,8 @@ export interface StaffMember {
   wage: number;
   /** Specialist skills (coaches and assistants). Missing = the overall rating. */
   skills?: Partial<Record<StaffSkill, number>>;
+  /** Recorded appointments only; no invented employment before the first record. */
+  history?: StaffAppointment[];
 }
 
 export type ManagerStyle = "attacking" | "possession" | "counter" | "defensive" | "pressing";
@@ -391,6 +403,8 @@ export interface TrainingPlan {
   intensity: TrainingIntensity;
   /** Match-specific preparation for the coming fixture (costs some development). */
   matchPrep?: MatchPrepFocus;
+  /** A real-time preparation drill; old saves without one retain their ready plan. */
+  matchPrepSession?: { focus: MatchPrepFocus; season: number; week: number; startedAt: number; durationSeconds: number };
 }
 
 export interface Fixture {
