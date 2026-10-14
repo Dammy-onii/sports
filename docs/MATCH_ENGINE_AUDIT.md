@@ -38,6 +38,8 @@ General, fitness, goalkeeping and youth coaches chiefly affect development and r
 
 ## Confirmed issues and inconsistencies
 
+*Update 14 October 2026 (engine v3):* items 2, 3 and 5 are fixed. Item 1 is addressed: the presentation interpolates simulation snapshots directly, players no longer overlap or teleport in open play, set-piece takers walk to the ball, and resets are drawn as cuts. See the ROADMAP improvements log.
+
 1. **Presentation can disagree with events.** Real-time travel follows simulation targets while authoritative play advances about 12.86 times faster. An action can resolve while its visual participants are still elsewhere. Reception additionally shifts a player's coordinates 70% toward the landing point. Smoothing alone cannot guarantee a coherent visible sequence.
 2. **Pass completion is recorded too early.** `startPass` increments completed passes and pass-network links before arrival. Reception can subsequently be intercepted or mishandled without reversing completion. Passing percentages and networks therefore describe the initial roll rather than successful controlled receptions.
 3. **Some reception branches move players twice.** Flight handling already calls `movePlayers`; heavy-touch and goalkeeper-claim branches call it again. Movement, fitness drain, distance, cooldowns and played seconds all advance twice. A seed-1234 probe found 44 player updates with more than one played-second increment in a single tick.

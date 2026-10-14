@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyCommand, createMatch, isFinished, simulateMatch, stepMatch } from "../engine";
+import { applyCommand, createMatch, isFinished, simulateMatch, stepMatch, wordScore } from "../engine";
 import { generateWorld } from "../generate";
 import { matchSetupFor } from "../setup";
 import { roundRobin } from "../competition";
@@ -66,7 +66,8 @@ describe("match engine", () => {
     expect(per(t.shots)).toBeLessThan(32);
     expect(per(t.fouls)).toBeGreaterThan(14);
     expect(per(t.fouls)).toBeLessThan(30);
-    expect(t.completed / t.passes).toBeGreaterThan(0.76);
+    // completion is counted on arrival (a pass nicked as it lands isn't complete)
+    expect(t.completed / t.passes).toBeGreaterThan(0.74);
     expect(per(t.tackles)).toBeGreaterThan(20);
     expect(per(t.tackles)).toBeLessThan(60);
     expect(per(t.corners)).toBeGreaterThan(5);
@@ -171,5 +172,117 @@ describe("highlights", () => {
         expect(windows.some(([a, b]) => e.tick >= a && e.tick <= b)).toBe(true);
       }
     }
+  });
+});
+
+describe("believable movement", () => {
+  it("players never teleport in open play and don't stand on top of each other", () => {
+    const s = createMatch(matchSetupFor(clubs[4], clubs[5], world.players, { homeAI: true, awayAI: true }), 77);
+    let jumps = 0;
+    let overlaps = 0;
+    let ticks = 0;
+    while (!isFinished(s)) {
+      const before = s.players.map((p) => ({ x: p.x, y: p.y, on: p.onPitch }));
+      const phase = s.phase;
+      stepMatch(s);
+      ticks++;
+      if (phase === "play" && s.phase === "play") {
+        for (const p of s.players) {
+          const b = before[p.idx];
+          // top speed is under 9 m/s: one game second can't cover 10 m
+          if (b.on && p.onPitch && Math.hypot(p.x - b.x, p.y - b.y) > 10) jumps++;
+        }
+      }
+      const on = s.players.filter((p) => p.onPitch);
+      for (let i = 0; i < on.length; i++) for (let j = i + 1; j < on.length; j++) if (Math.hypot(on[i].x - on[j].x, on[i].y - on[j].y) < 0.5) overlaps++;
+    }
+    expect(jumps).toBe(0);
+    // set-piece placing can briefly crowd a spot, but tokens shouldn't pile up
+    expect(overlaps / ticks).toBeLessThan(0.02);
+  });
+
+  it("restarts wait for the taker to walk over instead of teleporting him", () => {
+    const s = createMatch(matchSetupFor(clubs[6], clubs[7], world.players, { homeAI: true, awayAI: true }), 5);
+    let restarts = 0;
+    let far = 0;
+    while (!isFinished(s)) {
+      const r = s.restart;
+      const pos = s.players.map((p) => ({ x: p.x, y: p.y }));
+      stepMatch(s);
+      // corners end with the ball at the header target, not the taker
+      if (r && !s.restart && r.type !== "kickoff" && r.type !== "corner" && s.ball.owner !== null) {
+        restarts++;
+        const taker = s.players[s.ball.owner];
+        if (Math.hypot(pos[taker.idx].x - r.x, pos[taker.idx].y - r.y) > 12) far++;
+      }
+    }
+    expect(restarts).toBeGreaterThan(20);
+    expect(far / restarts).toBeLessThan(0.1);
+  });
+
+  it("repeating the same shout straight away doesn't stack its effect", () => {
+    const s = createMatch(matchSetupFor(clubs[0], clubs[1], world.players, { homeAI: false, awayAI: true }), 3);
+    for (let i = 0; i < 600; i++) stepMatch(s);
+    const conf = () => s.teams[0].playerIdx.reduce((a, i) => a + s.players[i].emo.conf, 0);
+    applyCommand(s, { type: "shout", side: 0, shout: "encourage" });
+    const once = conf();
+    for (let i = 0; i < 5; i++) applyCommand(s, { type: "shout", side: 0, shout: "encourage" });
+    expect(conf()).toBeCloseTo(once, 6);
+  });
+});
+
+describe("talking to a player during the match", () => {
+  const setup = () => matchSetupFor(clubs[0], clubs[1], world.players, { homeAI: false, awayAI: true });
+  const fresh = (seed = 9) => {
+    const s = createMatch(setup(), seed);
+    for (let i = 0; i < 900; i++) stepMatch(s);
+    return s;
+  };
+  const outfield = (s: ReturnType<typeof createMatch>) => s.teams[0].playerIdx.map((i) => s.players[i]).find((p) => p.onPitch && p.pos !== "GK")!;
+
+  it("the same words land differently depending on the player's attributes", () => {
+    const s = fresh();
+    const p = outfield(s);
+    p.attrs = { ...p.attrs, flair: 19, technique: 17 };
+    expect(wordScore(p, "express", { rating: 6.6, recent: 0 })).toBeGreaterThan(0.45);
+    p.attrs = { ...p.attrs, flair: 3, technique: 6 };
+    expect(wordScore(p, "express", { rating: 6.6, recent: 0 })).toBeLessThan(0);
+    // a determined, calm player takes a rollicking; a hot-head on a bad day doesn't
+    p.traits = { ...p.traits, determination: 19, aggression: 4 };
+    p.emo = { ...p.emo, conf: 0, frus: 0 };
+    const determined = wordScore(p, "demand", { rating: 6.0, recent: 0 });
+    p.traits = { ...p.traits, determination: 5, aggression: 18 };
+    p.emo = { ...p.emo, conf: -0.5, frus: 0.6 };
+    const hothead = wordScore(p, "demand", { rating: 6.0, recent: 0 });
+    expect(determined).toBeGreaterThan(0.15);
+    expect(hothead).toBeLessThan(-0.15);
+  });
+
+  it("a word changes how he plays for a while, then wears off, and you can't nag him", () => {
+    const s = fresh();
+    const p = outfield(s);
+    p.traits = { ...p.traits, professionalism: 18 };
+    p.attrs = { ...p.attrs, concentration: 18 };
+    expect(applyCommand(s, { type: "word", side: 0, playerId: p.id, word: "focus" })).toBe(true);
+    expect(p.word?.mult.concentration).toBeGreaterThan(1);
+    expect(s.events.at(-1)?.type).toBe("word");
+    // straight away again: refused (cooldown)
+    expect(applyCommand(s, { type: "word", side: 0, playerId: p.id, word: "praise" })).toBe(false);
+    // "careful" only for a booked player
+    expect(applyCommand(s, { type: "word", side: 0, playerId: outfield(s).id, word: "careful" })).toBe(false);
+    const until = p.word!.until;
+    while (p.ticksPlayed < until + 1 && !isFinished(s)) stepMatch(s);
+    expect(p.ticksPlayed).toBeGreaterThan(until);
+  });
+
+  it("replays identically with words in the command list", () => {
+    const live = fresh(21);
+    const p = outfield(live);
+    applyCommand(live, { type: "word", side: 0, playerId: p.id, word: "stuckIn" });
+    const cmds = live.commands.map((c) => ({ ...c }));
+    while (!isFinished(live)) stepMatch(live);
+    const replay = simulateMatch(setup(), 21, cmds);
+    expect(replay.score).toEqual(live.score);
+    expect(replay.events).toEqual(live.events);
   });
 });

@@ -21,6 +21,7 @@ import { TrainingTiming } from "../TrainingTiming";
 import { IndividualTrainingProgress } from "../IndividualTrainingProgress";
 import { ALL_POSITIONS, BidDialog, LoanDialog, PotentialStars, RADAR_AXES, RenewDialog, SeasonSheet, radarValues } from "../PlayerParts";
 import { AttrBar, Button, ButtonLink, Card, Crest, Empty, Field, Meter, OvrChip, Panel, PosBadge, Tabs, Tag, attrTextColor, cn } from "../ui";
+import { Term } from "../Term";
 
 type Tab = "overview" | "attributes" | "stats" | "career" | "development" | "contract";
 
@@ -90,11 +91,11 @@ export function PlayerScreen() {
         </div>
         <div className="flex items-end gap-5">
           <div className="text-center">
-            <div className="text-[11px] uppercase tracking-wide text-muted">Overall</div>
+            <div className="text-[11px] uppercase tracking-wide text-muted"><Term k="ovr">Overall</Term></div>
             <OvrChip value={ovrText} className="mt-1 text-lg" />
           </div>
           <div className="text-center">
-            <div className="text-[11px] uppercase tracking-wide text-muted">Potential</div>
+            <div className="text-[11px] uppercase tracking-wide text-muted"><Term k="potential">Potential</Term></div>
             <div className="mt-1.5"><PotentialStars save={save} p={p} /></div>
           </div>
           <div className="text-center">
@@ -382,7 +383,7 @@ function CareerTab({ p }: { p: Player }) {
             <th className="num">Goals</th>
             <th className="num">Assists</th>
             <th className="num">Avg rating</th>
-            <th className="num">OVR</th>
+            <th className="num"><Term k="ovr">OVR</Term></th>
           </tr>
         </thead>
         <tbody>

@@ -11,6 +11,7 @@ import { act, updateSave, useCareer, useOnboarding } from "@/lib/store/save-stor
 import { toast } from "../overlay";
 import { PlayerLink, PotentialStars } from "../PlayerParts";
 import { Button, ButtonLink, Card, Empty, Field, PageHeader, Panel, PosBadge, StatTile, Tabs, Tag } from "../ui";
+import { Term } from "../Term";
 
 const GROUPS = [
   { value: "GK", label: "Goalkeepers" },
@@ -182,8 +183,8 @@ function PlayerTable({ players }: { players: Player[] }) {
             <th>Player</th>
             <th>Club</th>
             <th className="num">Age</th>
-            <th className="num">OVR</th>
-            <th>Potential</th>
+            <th className="num"><Term k="ovr">OVR</Term></th>
+            <th><Term k="potential">Potential</Term></th>
             <th className="num">Value</th>
             <th className="num">Known</th>
           </tr>

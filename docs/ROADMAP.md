@@ -120,11 +120,25 @@ Contract depth (clauses, agents, negotiation rounds), a third division and a con
 ## Improvements log
 Ideas and tuning notes found during development. Newest first.
 
+- **2026-10-14 — Following the match, player talks, substitutions, explanations.**
+  - ✅ Pace presets Relaxed / Normal / Quick / Fast (18 / 12 / 7 / 3½ minutes); Normal is the default (was 7 minutes). Play slows to about half pace near the goals, for shots, crosses, corners and penalties (can be switched off).
+  - ✅ On-pitch caption for the latest event; dashed pass lines with a target ring, red shot lines.
+  - ✅ Talk to individual players (8 options, `word` match command, replayable). Reactions come from his attributes, personality, emotions, rating and rapport; effects last 10 minutes; 4-minute cooldown; nagging wears thin. The assistant previews the likely reaction at quality 8+.
+  - ✅ Substitutions are planned, undoable and confirmed together; substituted players are listed with the rule that they can't return.
+  - ✅ Glossary tooltips (`components/Term.tsx`) for OVR, rating, potential, fitness, morale, sharpness, form, xG, familiarity, cohesion and rapport, used on the squad, player, transfer, scouting, training, academy, match and report screens.
+- **2026-10-14 — Match movement fixes (engine v3).**
+  - ✅ Players kept a body's width apart (1.1 m). Defenders used to stand exactly on the man they pressed or marked, so tokens stacked on top of each other (about one overlapping pair every three ticks; now about 1%).
+  - ✅ No more open-play teleports. The heavy-touch and keeper-claim branches moved every player twice in one tick (jumps of 10–14 m).
+  - ✅ Set-piece takers walk to the ball (up to 12 game seconds) instead of appearing there. Corners are only attacked and defended by players already in or near the box (a full-back used to appear from 40 m away). The viewer draws kick-off resets as a cut instead of a sprint.
+  - ✅ A pass nicked or miscontrolled as it arrives no longer counts as completed (pass % is now about 76%, measured on arrival).
+  - ✅ Repeating the same shout within five game minutes no longer stacks its emotional lift or morale boost.
+  - ✅ Retuned for the spacing: shot and pass pressure bands shifted by a body's width, fewer cynical fouls, frustration matters a little less for cards, and the false nine drops slightly deeper. Calibration (240 matches): 2.6–2.7 goals, 24 shots, 3.1–3.5 yellows, 0.18–0.2 reds, 43–50% home wins.
+  - ⬜ Still open from the audit: the two clock definitions, injury substitutions overriding the human manager, and possession credited during dead balls.
 - **2026-10-11 — Training, player identification, staff selection and match presentation.**
   - ✅ Training Plan/Development OVR bars, Attributes-only improvements summary, visible personal-focus and attribute progress, weekly development timing, saved 60-second match-training drills and estimated position-learning duration. Attribute gains advance weekly; match-preparation readiness advances on its saved timer.
   - ✅ Larger match shirt numbers, optional name labels, on-ball identity, selectable player detail/roster, and visible shirt numbers throughout tactics.
   - ✅ Fitness-coach Physical/Recovery skills, comparisons, overall rating and actual appointment history; existing v9 saves preserve previous effects.
-  - ✅ One steady normal pace: 90 regulation minutes take seven real minutes; no speed multipliers. Separate 30/60 fps targets, interpolated and eased movement with normal presentation speeds and gradual acceleration, bounded per-frame work and worker highlight look-ahead. Pauses/celebrations add time; device performance affects actual fps.
+  - ✅ Seven-minute default with selectable 1×/2×/3× playback. Separate 30/60 fps targets, synchronized player/ball interpolation and possession attachment, bounded per-frame work and worker highlight look-ahead. Pauses/celebrations add time; device performance affects actual fps.
   - ✅ Shared filled-track sliders with value readouts, endpoint labels and keyboard/step controls for tactics, loans, ticket prices and budgets.
   - ✅ README, architecture and rules refreshed; [Playing guide](./PLAYING_GUIDE.md) explains the controls and coach-selection criteria.
 

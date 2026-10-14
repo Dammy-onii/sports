@@ -6,6 +6,7 @@ import { MAX_SQUAD_SIZE, releaseYouth, signYouth } from "@/game/youth";
 import { act, useCareer } from "@/lib/store/save-store";
 import { toast } from "../overlay";
 import { Button, Card, Empty, Ovr, PageHeader, PosBadge, Stars, StatTile } from "../ui";
+import { Term } from "../Term";
 
 /** Youth intake decisions and academy overview. */
 export function YouthScreen() {
@@ -32,8 +33,8 @@ export function YouthScreen() {
                 <th>Pos</th>
                 <th>Prospect</th>
                 <th className="num">Age</th>
-                <th className="num">OVR</th>
-                <th>Potential</th>
+                <th className="num"><Term k="ovr">OVR</Term></th>
+                <th><Term k="potential">Potential</Term></th>
                 <th />
               </tr>
             </thead>

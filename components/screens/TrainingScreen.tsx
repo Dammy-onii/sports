@@ -18,6 +18,7 @@ import type { MatchPrepFocus, Player, Position, TrainingFocus, TrainingIntensity
 import { updateSave, useCareer, useOnboarding } from "@/lib/store/save-store";
 import { ALL_POSITIONS, PlayerLink, PotentialStars } from "../PlayerParts";
 import { ButtonLink, Card, CardHeader, Meter, Ovr, PageHeader, PosBadge, Segmented, StatTile, Tabs, Tag, attrTextColor, cn } from "../ui";
+import { Term } from "../Term";
 
 const FOCUS_BLURB: Record<TrainingFocus, string> = {
   balanced: "Even development across every area.",
@@ -191,7 +192,7 @@ function PlanView() {
                 <th>Pos</th>
                 <th>Player</th>
                 <th className="num">Age</th>
-                <th className="num">OVR</th>
+                <th className="num"><Term k="ovr">OVR</Term></th>
                 <th>Pot.</th>
                 <th className="num">Fit</th>
                 <th className="hidden md:table-cell">Training progress</th>
@@ -352,8 +353,8 @@ function DevelopmentView() {
               <th>Pos</th>
               <th>Player</th>
               <th className="num">Age</th>
-              <th className="num">OVR</th>
-              <th>Potential</th>
+              <th className="num"><Term k="ovr">OVR</Term></th>
+              <th><Term k="potential">Potential</Term></th>
               <th className="num">Season</th>
               <th className="num">4 wks</th>
               <th className="hidden md:table-cell">Next OVR</th>

@@ -195,7 +195,7 @@ export const ROLES: Record<RoleId, RoleInfo> = {
     label: "False nine",
     positions: ["ST"],
     blurb: "Drops deep to link play, dragging centre-backs out of position.",
-    effects: { dx: -0.12, playmake: 1.1, runs: 0.3, boxRuns: 1, carry: 1.15 },
+    effects: { dx: -0.15, playmake: 1.1, runs: 0.3, boxRuns: 1, carry: 1.15 },
   },
 };
 

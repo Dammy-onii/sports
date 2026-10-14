@@ -1,5 +1,6 @@
+import type { WordId } from "./words";
 import type { RoleEffects } from "../roles";
-import type { Attributes, Traits, ClubColors, CrestDesign, FormationId, OppInstruction, Player, PlayerInstructions, Position, RoleId, SetPieces, ShoutId, TacticalFamiliarity, TalkTone, TeamInstructions } from "../types";
+import type { AttributeKey, Attributes, Traits, ClubColors, CrestDesign, FormationId, OppInstruction, Player, PlayerInstructions, Position, RoleId, SetPieces, ShoutId, TacticalFamiliarity, TalkTone, TeamInstructions } from "../types";
 
 export type Side = 0 | 1; // 0 = home (attacks +x), 1 = away (attacks -x)
 
@@ -140,6 +141,10 @@ export interface MPlayer {
   spd: number;
   /** In-match emotions (see docs/DEPTH_PLAN.md §6). */
   emo: Emotions;
+  /** An active word from the touchline: attribute multipliers until he's played `until` seconds. */
+  word?: { id: string; until: number; mult: Partial<Record<AttributeKey, number>> };
+  /** Played-seconds marks of recent words (nagging wears thin). */
+  wordsAt?: number[];
   /** Match sharpness 0–1 (rhythm from playing regularly). */
   sharp: number;
   /** Relationship with the manager (0–100): how well talks land. */
@@ -195,6 +200,8 @@ export interface TeamState {
   stats: TeamStats;
   /** Active touchline shout. */
   shout: ShoutId | null;
+  /** Tick a shout last moved the players' emotions (repeating it straight away does nothing more). */
+  shoutAt?: number;
   setPieces?: SetPieces;
   /** Half-time team talk given (tone), if any. */
   talk?: TalkTone;
@@ -291,7 +298,8 @@ export type MatchEventType =
   | "talk"
   | "heavy_touch"
   | "claim"
-  | "emotion";
+  | "emotion"
+  | "word";
 
 export interface MatchEvent {
   tick: number;
@@ -319,7 +327,8 @@ export type MatchCommand =
   | { type: "shout"; side: Side; shout: ShoutId | null }
   | { type: "teamTalk"; side: Side; tone: TalkTone }
   | { type: "pi"; side: Side; slot: number; pi: PlayerInstructions | null }
-  | { type: "oi"; side: Side; playerId: string; oi: OppInstruction | null };
+  | { type: "oi"; side: Side; playerId: string; oi: OppInstruction | null }
+  | { type: "word"; side: Side; playerId: string; word: WordId };
 
 /** Data recorded during the match for analysis views. */
 export interface MatchAnalytics {

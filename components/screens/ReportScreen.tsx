@@ -6,6 +6,7 @@ import { useState } from "react";
 import type { MatchReport, ReportPlayer } from "@/game/analysis";
 import { useCareer } from "@/lib/store/save-store";
 import { Heatmap, Momentum, PassNetwork, XgTimeline } from "../charts";
+import { Term } from "../Term";
 import {
   Card,
   Crest,
@@ -244,7 +245,7 @@ export function ReportScreen() {
 function PlayerRatings({ r }: { r: MatchReport }) {
   const cols = [0, 1] as const;
   return (
-    <Panel title="Ratings" className="lg:col-span-2">
+    <Panel title="Ratings" subtitle={<>Each player&apos;s <Term k="rating">match rating</Term> out of 10</>} className="lg:col-span-2">
       <div className="grid gap-4 px-4 pb-4 sm:grid-cols-2">
         {cols.map((side) => (
           <div key={side}>

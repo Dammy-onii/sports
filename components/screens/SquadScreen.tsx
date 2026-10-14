@@ -12,6 +12,7 @@ import { perceivedPotential } from "@/game/progress";
 import { useCareer } from "@/lib/store/save-store";
 import { PotentialStars } from "../PlayerParts";
 import { Button, ButtonLink, Card, Meter, Ovr, PageHeader, PosBadge, Segmented, Tabs, Tag, attrTextColor, cn } from "../ui";
+import { GLOSSARY, Term } from "../Term";
 
 type View = "overview" | "attributes" | "stats" | "morale" | "contracts";
 type Group = "all" | "gk" | "def" | "mid" | "att";
@@ -85,17 +86,17 @@ export function SquadScreen() {
       posCol,
       nameCol,
       { key: "age", label: "Age", num: true, sort: (p) => p.age, cell: (p) => p.age },
-      { key: "ovr", label: "OVR", num: true, sort: (p) => overall(p), cell: (p) => <Ovr value={overall(p)} /> },
-      { key: "pot", label: "Potential", sort: (p) => perceivedPotential(save, p)[0] + perceivedPotential(save, p)[1], cell: (p) => <PotentialStars save={save} p={p} /> },
+      { key: "ovr", label: "OVR", title: GLOSSARY.ovr.text, num: true, sort: (p) => overall(p), cell: (p) => <Ovr value={overall(p)} /> },
+      { key: "pot", label: "Potential", title: GLOSSARY.potential.text, sort: (p) => perceivedPotential(save, p)[0] + perceivedPotential(save, p)[1], cell: (p) => <PotentialStars save={save} p={p} /> },
       { key: "status", label: "Status", sort: (p) => p.status, cell: (p) => <span className="text-xs">{STATUS_INFO[p.status].label}</span> },
-      { key: "form", label: "Form", num: true, sort: (p) => averageForm(p) ?? 0, cell: (p) => (averageForm(p)?.toFixed(1) ?? "–") },
-      { key: "fit", label: "Fitness", sort: (p) => p.fitness, cell: (p) => <Meter value={p.fitness} className="w-16" label="Fitness" /> },
+      { key: "form", label: "Form", title: GLOSSARY.form.text, num: true, sort: (p) => averageForm(p) ?? 0, cell: (p) => (averageForm(p)?.toFixed(1) ?? "–") },
+      { key: "fit", label: "Fitness", title: GLOSSARY.fitness.text, sort: (p) => p.fitness, cell: (p) => <Meter value={p.fitness} className="w-16" label="Fitness" /> },
       { key: "value", label: "Value", num: true, sort: (p) => playerValue(p), cell: (p) => formatMoney(playerValue(p)) },
     ],
     attributes: [
       posCol,
       nameCol,
-      { key: "ovr", label: "OVR", num: true, sort: (p) => overall(p), cell: (p) => <Ovr value={overall(p)} /> },
+      { key: "ovr", label: "OVR", title: GLOSSARY.ovr.text, num: true, sort: (p) => overall(p), cell: (p) => <Ovr value={overall(p)} /> },
       ...ATTRIBUTE_GROUPS[attrGroup].keys.map(
         (k): Col => ({
           key: k,
@@ -142,7 +143,7 @@ export function SquadScreen() {
         },
       },
       { key: "morale", label: "Morale", sort: (p) => p.morale, cell: (p) => <Meter value={p.morale} className="w-20" label="Morale" /> },
-      { key: "fit", label: "Fitness", sort: (p) => p.fitness, cell: (p) => <Meter value={p.fitness} className="w-20" label="Fitness" /> },
+      { key: "fit", label: "Fitness", title: GLOSSARY.fitness.text, sort: (p) => p.fitness, cell: (p) => <Meter value={p.fitness} className="w-20" label="Fitness" /> },
       {
         key: "mood",
         label: "Mood",
@@ -247,6 +248,9 @@ export function SquadScreen() {
           options={ATTRIBUTE_GROUPS.map((g, i) => ({ value: String(i), label: g.label }))}
         />
       )}
+      <p className="mb-2 text-xs text-muted">
+        What these mean: <Term k="ovr">OVR</Term> · <Term k="potential">Potential</Term> · <Term k="form">Form</Term> · <Term k="fitness">Fitness</Term> · <Term k="morale">Morale</Term> · <Term k="sharpness">Sharpness</Term>
+      </p>
       <Card className="overflow-x-auto">
         <table className="table min-w-[640px]">
           <thead>

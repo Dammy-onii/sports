@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { pitchPlayerAt } from "../../components/match/drawPitch";
-import { MATCH_PACING, playbackDelta, playbackTicksPerSecond } from "../../components/match/playback";
-import { createPitchMotion, followPoint, updatePitchMotion, PLAYER_VISUAL_SPEED, BALL_VISUAL_SPEED } from "../../components/match/motion";
+import { DEFAULT_PACE, MATCH_PACING, playbackDelta, playbackTicksPerSecond } from "../../components/match/playback";
+import { createPitchMotion, updatePitchMotion } from "../../components/match/motion";
 import { fixtureSetup, newCareer, userSlotFixture } from "../career";
 import { fireStaff, hireStaff } from "../club";
 import { coachSkills, staffSkill } from "../development";
@@ -150,33 +150,61 @@ describe("match pacing independent of rendering", () => {
     expect(pitchPlayerAt(match, 1000, 700, 975, 675)).toBeNull();
   });
 
-  it("90 regulation minutes take seven minutes and hidden-tab delays are clamped", () => {
-    expect(MATCH_PACING.map((p) => [p.multiplier, p.seconds])).toEqual([[1, 420]]);
-    for (const preset of MATCH_PACING) {
-      expect(playbackTicksPerSecond(preset.seconds) * preset.seconds).toBe(5400);
-      expect(preset.seconds * preset.multiplier).toBe(420);
-    }
+  it("the default pace gives 90 minutes twelve real minutes and hidden-tab delays are clamped", () => {
+    expect(MATCH_PACING[DEFAULT_PACE].seconds).toBe(720);
+    expect(MATCH_PACING.map((p) => p.seconds)).toEqual([1080, 720, 420, 210]);
+    for (const preset of MATCH_PACING) expect(playbackTicksPerSecond(preset.seconds) * preset.seconds).toBe(5400);
     expect(playbackDelta(100_000, 0)).toBe(0.1);
     expect(playbackDelta(0, 100)).toBe(0);
     expect(playbackDelta(1000 / 60, 0)).toBeCloseTo(1 / 60);
   });
 
-  it("eases motion at both frame rates without overshoot or accelerated travel", () => {
-    expect(PLAYER_VISUAL_SPEED).toBeLessThanOrEqual(7);
-    expect(BALL_VISUAL_SPEED).toBeLessThanOrEqual(26);
-    const target = { x: 105, y: 68 };
-    const positions = [30, 60].map((fps) => {
-      let point = { x: 0, y: 0 };
-      for (let frame = 0; frame < fps; frame++) {
-        const next = followPoint(point, target, 1 / fps, PLAYER_VISUAL_SPEED);
-        expect(Math.hypot(next.x - point.x, next.y - point.y)).toBeLessThanOrEqual(PLAYER_VISUAL_SPEED / fps + 1e-10);
-        point = next;
+  it("keeps possession attached and flights on the same timeline at every speed", () => {
+    const save = fresh();
+    const [home, away] = Object.values(save.clubs);
+    for (const pace of MATCH_PACING) for (const fps of [30, 60]) {
+      const match = createMatch(matchSetupFor(home, away, save.players), 99);
+      const motion = createPitchMotion(match);
+      const player = match.players.find((p) => p.onPitch)!;
+      player.px = 10; player.x = 18; player.py = 20; player.y = 24;
+      match.ball.owner = player.idx;
+      updatePitchMotion(motion, match, 0.5, 1 / fps);
+      expect(motion.players.get(player.id)).toEqual({ x: 14, y: 22 });
+      expect(motion.ball).toEqual(motion.players.get(player.id));
+      match.ball.owner = null;
+      match.ball.px = 18; match.ball.x = 30; match.ball.py = 24; match.ball.y = 30;
+      updatePitchMotion(motion, match, 0.5, 1 / fps);
+      expect(motion.ball).toEqual({ x: 24, y: 27 });
+      updatePitchMotion(motion, match, 1, 1 / fps);
+      expect(motion.ball).toEqual({ x: 30, y: 30 });
+      const paused = structuredClone(motion);
+      updatePitchMotion(motion, match, 0, 0);
+      expect(motion).toEqual(paused);
+      expect(playbackTicksPerSecond(pace.seconds)).toBeGreaterThan(0);
+    }
+  });
+
+  it("keeps the ball with its actual carrier through live passes and turnovers", () => {
+    const save = fresh();
+    const [home, away] = Object.values(save.clubs);
+    const match = createMatch(matchSetupFor(home, away, save.players), 99);
+    const motion = createPitchMotion(match);
+    let possessions = 0, flights = 0;
+    for (let tick = 0; tick < 1800; tick++) {
+      stepMatch(match);
+      for (const alpha of [0, 0.5, 1]) {
+        updatePitchMotion(motion, match, alpha, 1 / 60);
+        if (match.ball.owner !== null) {
+          expect(motion.ball).toEqual(motion.players.get(match.players[match.ball.owner].id));
+          possessions++;
+        } else if (match.ball.flight) {
+          expect(motion.ball.x).toBeCloseTo(match.ball.px + (match.ball.x - match.ball.px) * alpha);
+          flights++;
+        }
       }
-      return point;
-    });
-    expect(Math.abs(positions[0].x - positions[1].x)).toBeLessThan(0.03);
-    expect(followPoint({ x: 0, y: 0 }, { x: 1, y: 0 }, 1, PLAYER_VISUAL_SPEED).x).toBeLessThanOrEqual(1);
-    expect(followPoint({ x: 3, y: 4 }, target, 0, PLAYER_VISUAL_SPEED)).toEqual({ x: 3, y: 4 });
+    }
+    expect(possessions).toBeGreaterThan(100);
+    expect(flights).toBeGreaterThan(100);
   });
 
   it("motion preserves simulation state and resets on highlights, half-time and substitutions", () => {
@@ -185,13 +213,11 @@ describe("match pacing independent of rendering", () => {
     const match = createMatch(matchSetupFor(save.clubs[home], save.clubs[away], save.players), 99);
     const motion = createPitchMotion(match);
     const p = match.players.find((p) => p.onPitch)!;
-    const original = { ...motion.players.get(p.id)! };
     p.x += 20;
     const before = structuredClone(match);
     updatePitchMotion(motion, match, 1, 1 / 60);
     expect(match).toEqual(before);
-    expect(motion.players.get(p.id)!.x).toBeLessThan(p.x);
-    expect(Math.hypot(motion.players.get(p.id)!.x - original.x, motion.players.get(p.id)!.y - original.y)).toBeLessThanOrEqual(PLAYER_VISUAL_SPEED / 60);
+    expect(motion.players.get(p.id)!.x).toBe(p.x);
     updatePitchMotion(motion, match, 1, 1 / 60, true);
     expect(motion.players.get(p.id)).toEqual({ x: p.x, y: p.y });
     p.x += 10;

@@ -11,6 +11,7 @@ import { act, updateSave, useCareer, useOnboarding } from "@/lib/store/save-stor
 import { toast } from "../overlay";
 import { BidDialog, LoanDialog, PlayerLink, PotentialStars } from "../PlayerParts";
 import { Button, ButtonLink, Card, Crest, Empty, PageHeader, PosBadge, Segmented, StatTile, Tabs, Tag, cn } from "../ui";
+import { Term } from "../Term";
 
 type Tab = "market" | "shortlist" | "loans" | "offers" | "selling" | "history";
 type Group = "all" | "GK" | "DEF" | "MID" | "ATT";
@@ -161,8 +162,8 @@ function PlayerTable({ save, rows, open, empty = "No players match those filters
             <th>Player</th>
             <th>Club</th>
             <th className="num">Age</th>
-            <th className="num">OVR</th>
-            <th>Potential</th>
+            <th className="num"><Term k="ovr">OVR</Term></th>
+            <th><Term k="potential">Potential</Term></th>
             <th className="num">Asking</th>
             <th />
           </tr>
@@ -265,7 +266,7 @@ function Loans({ save, open }: { save: SaveGame; open: boolean }) {
                   <th>Player</th>
                   <th>Club</th>
                   <th className="num">Age</th>
-                  <th className="num">OVR</th>
+                  <th className="num"><Term k="ovr">OVR</Term></th>
                   <th className="num">Wage</th>
                   <th>Interest</th>
                   <th />
@@ -395,7 +396,7 @@ function Selling({ save }: { save: SaveGame }) {
             <th>Pos</th>
             <th>Player</th>
             <th className="num">Age</th>
-            <th className="num">OVR</th>
+            <th className="num"><Term k="ovr">OVR</Term></th>
             <th className="num">Value</th>
             <th className="num">Contract</th>
             <th />

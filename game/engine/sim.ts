@@ -3,6 +3,7 @@ import { familiarity } from "../ratings";
 import { Rng, hashString } from "../rng";
 import { effectiveRole, talkReaction, validRole } from "../roles";
 import { roleFamiliarity, teamFamiliarity } from "../familiarity";
+import { WORD_COOLDOWN, WORD_DURATION, outcomeOf, wordAvailable, wordEffect, wordReply, wordScore } from "./words";
 import type { AttributeKey, FormationId, Player, Position, ShoutId, TeamInstructions } from "../types";
 import type {
   Flight,
@@ -21,7 +22,7 @@ import type {
 } from "./types";
 import { HEAT_COLS, HEAT_ROWS } from "./types";
 
-export const ENGINE_VERSION = 2;
+export const ENGINE_VERSION = 3;
 export const TICKS_PER_MINUTE = 60;
 const HALF_TICKS = 45 * TICKS_PER_MINUTE;
 const CY = W / 2;
@@ -72,7 +73,8 @@ export function xgAt(attacking: Side, x: number, y: number): number {
 
 /** Shots under close attention are much worse chances. */
 function pressureFactor(pressure: number): number {
-  return pressure < 1 ? 0.3 : pressure < 2 ? 0.45 : pressure < 3.5 ? 0.65 : pressure < 6 ? 0.85 : 1;
+  // players keep a body's width apart (MIN_GAP), so "touch tight" starts at about 1.1 m
+  return pressure < 1.35 ? 0.3 : pressure < 2.2 ? 0.45 : pressure < 3.7 ? 0.65 : pressure < 6.2 ? 0.85 : 1;
 }
 
 /** Outfield opponents inside the triangle shooter → goal posts. */
@@ -278,8 +280,9 @@ function eff(p: MPlayer, key: AttributeKey): number {
   const kind = KEY_KIND[key] ?? K.Plain;
   const fam = kind === K.Keeper ? 1 : 0.85 + 0.15 * p.fam;
   const shout = p.teamShout ? (SHOUT_ATTRS[p.teamShout][key] ?? 1) : 1;
+  const word = p.word && p.ticksPlayed < p.word.until ? (p.word.mult[key] ?? 1) : 1;
   const k = kind === K.Touch ? c.touch : kind === K.Mind ? c.mind : kind === K.Tactical ? c.tactical : kind === K.Decision ? c.tactical * c.mind : kind === K.Tackle ? c.tackle : 1;
-  return p.attrs[key] * c.base * fam * shout * k;
+  return p.attrs[key] * c.base * fam * shout * word * k;
 }
 
 /** Team instructions as they play out on the pitch (touchline shouts adjust them). */
@@ -570,14 +573,30 @@ export function applyCommand(s: MatchState, cmd: MatchCommand): boolean {
     return true;
   }
   if (cmd.type === "shout") {
-    setShout(s, cmd.side, cmd.shout);
-    if (cmd.shout === "encourage") {
+    const fresh = setShout(s, cmd.side, cmd.shout);
+    if (cmd.shout === "encourage" && fresh) {
       // lifts players whose heads have dropped (once per shout)
       for (const i of team.playerIdx) {
         const p = s.players[i];
         if (p.morale < 60) p.morale = Math.min(100, p.morale + 6);
       }
     }
+    s.commands.push({ tick: s.tick, cmd });
+    return true;
+  }
+  if (cmd.type === "word") {
+    const p = team.playerIdx.map((i) => s.players[i]).find((x) => x.id === cmd.playerId);
+    if (!p || !wordAvailable(p, cmd.word)) return false;
+    const recent = (p.wordsAt ?? []).filter((t) => p.ticksPlayed - t < 900);
+    if (recent.length && p.ticksPlayed - recent[recent.length - 1] < WORD_COOLDOWN) return false;
+    const score = wordScore(p, cmd.word, { rating: p.used && p.ticksPlayed > 300 ? playerRating(s, p) : 6.5, recent: recent.length });
+    const outcome = outcomeOf(score);
+    const fx = wordEffect(p, cmd.word, outcome);
+    feel(s, p, { conf: fx.conf, nerves: fx.nerves, frus: fx.frus });
+    p.morale = clamp(p.morale + fx.morale, 0, 100);
+    p.word = { id: cmd.word, until: p.ticksPlayed + WORD_DURATION, mult: fx.mult };
+    p.wordsAt = [...recent, p.ticksPlayed];
+    emit(s, "word", cmd.side, { player: p.id, text: `${cmd.word}|${outcome}|${wordReply(p, outcome, s.tick)}` });
     s.commands.push({ tick: s.tick, cmd });
     return true;
   }
@@ -1041,6 +1060,40 @@ function movePlayers(s: MatchState) {
     const drain = 0.000058 * (1.5 - p.attrs.stamina / 20) * (0.45 + moved / 4.5) * (p.teamShout === "demand" ? 1.12 : 1) * factor(p.attrs.naturalFitness, 1.06, 0.94);
     p.energy = clamp(p.energy - drain, 0.2, 1);
   }
+  separate(s);
+}
+
+/** Two players never stand in the same spot: nudge anyone closer than a body's width apart. */
+const MIN_GAP = 1.1;
+function separate(s: MatchState) {
+  const on = s.players.filter((p) => p.onPitch);
+  for (let i = 0; i < on.length; i++) {
+    const a = on[i];
+    for (let j = i + 1; j < on.length; j++) {
+      const b = on[j];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= MIN_GAP * MIN_GAP) continue;
+      const d = Math.sqrt(d2);
+      let ux: number, uy: number;
+      if (d < 1e-6) {
+        // exactly on top of each other: split along a fixed, deterministic direction
+        ux = (a.idx + b.idx) % 2 ? 0.6 : -0.6;
+        uy = 0.8;
+      } else {
+        ux = dx / d;
+        uy = dy / d;
+      }
+      // the man on the ball holds his line; everyone else gives way
+      const aShare = s.ball.owner === a.idx ? 0 : s.ball.owner === b.idx ? 1 : 0.5;
+      const push = MIN_GAP - d;
+      a.x = clamp(a.x - ux * push * aShare, -1, L + 1);
+      a.y = clamp(a.y - uy * push * aShare, -1, W + 1);
+      b.x = clamp(b.x + ux * push * (1 - aShare), -1, L + 1);
+      b.y = clamp(b.y + uy * push * (1 - aShare), -1, W + 1);
+    }
+  }
 }
 
 // ───────────────────────────── on-ball decisions ─────────────────────────────
@@ -1163,8 +1216,8 @@ function decide(s: MatchState, rng: Rng, c: MPlayer, forcePass = false): Option 
     const inBox = relX(side, m.x) > 0.83 && Math.abs(m.y - CY) < 20;
     const isCross = wide && inBox;
     const laneRisk = lane < 1 ? 0.4 : lane < 2.5 ? 0.1 : lane < 4 ? 0.03 : 0;
-    const recvRisk = recv < 1.5 ? 0.16 : recv < 3 ? 0.06 : 0;
-    let p = 0.99 - d * 0.003 * (1.45 - passing / 20) - laneRisk * (1.1 - vision / 40) - recvRisk * 0.7 - (pressure < 2 ? 0.03 : 0);
+    const recvRisk = recv < 1.3 ? 0.16 : recv < 2.6 ? 0.06 : 0;
+    let p = 0.99 - d * 0.003 * (1.45 - passing / 20) - laneRisk * (1.1 - vision / 40) - recvRisk * 0.7 - (pressure < 1.6 ? 0.03 : 0);
     if (inBox && !isCross) p *= recv < 2 ? 0.5 : recv < 4 ? 0.75 : 0.95;
     if (isCross) p = 0.2 + eff(c, "crossing") * 0.006 + eff(c, "technique") * 0.002 - (recv < 2 ? 0.06 : 0);
     // tired minds lose focus late on
@@ -1239,6 +1292,17 @@ function decide(s: MatchState, rng: Rng, c: MPlayer, forcePass = false): Option 
 }
 
 // ───────────────────────────── actions ─────────────────────────────
+
+/** A pass counted as completed at launch that never reached its man (nicked or miscontrolled). */
+function unCompletePass(s: MatchState, f: Flight) {
+  if (f.receiver === null) return;
+  const passer = s.players[f.passer];
+  passer.st.passesCompleted = Math.max(0, passer.st.passesCompleted - 1);
+  const team = s.teams[passer.side].stats;
+  team.passesCompleted = Math.max(0, team.passesCompleted - 1);
+  const key = `${f.passer}-${f.receiver}`;
+  if (s.analytics.links[key]) s.analytics.links[key]--;
+}
 
 function giveBall(s: MatchState, p: MPlayer, rng: Rng) {
   s.ball.owner = p.idx;
@@ -1558,6 +1622,23 @@ function designated(s: MatchState, side: Side, kind: "penalty" | "freeKick" | "c
   return [...pool].sort((a, b) => score(b) - score(a))[0];
 }
 
+/** Longest a restart waits for its taker to walk over (game seconds). */
+const RESTART_WAIT = 12;
+
+/** Who will take this restart (the same choice takeRestart makes). */
+function restartTaker(s: MatchState, r: Restart): MPlayer | undefined {
+  if (r.type === "kickoff") return undefined;
+  if (r.type === "goalkick") return goalkeeper(s, r.side);
+  if (r.type === "corner") return designated(s, r.side, "corner");
+  if (r.type === "penalty") return designated(s, r.side, "penalty");
+  if (r.type === "freekick" && dist(r.x, r.y, goalX(r.side), CY) < 30) return designated(s, r.side, "freeKick");
+  return nearestTaker(s, r);
+}
+
+function nearestTaker(s: MatchState, r: Restart): MPlayer | undefined {
+  return [...onPitch(s, r.side)].filter((p) => p.pos !== "GK" || r.type === "freekick").sort((a, b) => dist(a.x, a.y, r.x, r.y) - dist(b.x, b.y, r.x, r.y))[0];
+}
+
 function takeRestart(s: MatchState, rng: Rng) {
   const r = s.restart!;
   s.phase = "play";
@@ -1597,8 +1678,8 @@ function takeRestart(s: MatchState, rng: Rng) {
     resolveShot(s, rng, taker, { penalty: true, xg: 0.76 });
     return;
   }
-  // throw-in / free kick: nearest player takes it
-  const taker = [...team].filter((p) => p.pos !== "GK" || r.type === "freekick").sort((a, b) => dist(a.x, a.y, r.x, r.y) - dist(b.x, b.y, r.x, r.y))[0];
+  // throw-in / free kick: the player who walked over takes it
+  const taker = nearestTaker(s, r)!;
   taker.x = r.x;
   taker.y = r.y;
   giveBall(s, taker, rng);
@@ -1649,10 +1730,14 @@ function takeCorner(s: MatchState, rng: Rng, r: Restart) {
 
   const near = routine === "near";
   // near post: quick flick-ons at the front; far post: big men attacking the back stick
-  const targets = att.filter((p) => p !== taker);
+  // only players already up for the corner can attack it (no one appears from the halfway line)
+  const inBox = (p: MPlayer) => dist(p.x, p.y, goalX(side), CY) < 24;
+  const up = others.filter(inBox);
+  const targets = up.length ? up : others;
   const power = near ? 2 : 4;
   const target = targets[rng.weighted(targets.map((p) => Math.pow(aerial(p), power)))];
-  const marker = [...def].filter((p) => p.pos !== "GK").sort((a, b) => aerial(b) + b.attrs.marking - (aerial(a) + a.attrs.marking))[0];
+  const back = def.filter((p) => p.pos !== "GK");
+  const marker = [...(back.some(inBox) ? back.filter(inBox) : back)].sort((a, b) => aerial(b) + b.attrs.marking - (aerial(a) + a.attrs.marking))[0];
   const gk = goalkeeper(s, other(side));
   const fromTop = r.y < CY;
   const spotX = goalX(side) + toward * (near ? rng.range(4, 7) : rng.range(7, 12));
@@ -1747,7 +1832,7 @@ function tacticalFoul(s: MatchState, rng: Rng, opp: MPlayer, c: MPlayer): boolea
   const ownBox = relX(c.side, c.x) > 0.843 && Math.abs(c.y - CY) < 20.16;
   // hot-heads and streetwise defenders take one for the team
   const cynical = factor(traits(opp).aggression, 0.3, 1.8) * factor(eff(opp, "decisions"), 0.8, 1.2);
-  if (!rng.chance((ownBox ? 0.04 : 0.16) * cynical)) return false;
+  if (!rng.chance((ownBox ? 0.04 : 0.13) * cynical)) return false;
   foul(s, rng, opp, c);
   return true;
 }
@@ -1803,7 +1888,7 @@ function foul(s: MatchState, rng: Rng, offender: MPlayer, victim: MPlayer) {
   const temper = traits(offender).aggression;
   // booked players are more careful with the next challenge (if they're sensible)
   const careful = offender.yellow ? factor(eff(offender, "decisions"), 0.7, 0.2) : 1;
-  const cardChance = (0.13 + (dangerous ? 0.08 : 0) + (inBox ? 0.1 : 0)) * factor(temper, 0.35, 1.8) * careful * (1 + 0.6 * offender.emo.frus);
+  const cardChance = (0.13 + (dangerous ? 0.08 : 0) + (inBox ? 0.1 : 0)) * factor(temper, 0.35, 1.8) * careful * (1 + 0.4 * offender.emo.frus);
   // the victim's temper flares; the offender's boils over if things aren't going his way
   feel(s, victim, { frus: 0.06 });
   if (rng.chance(0.001 * Math.pow(temper / 10.5, 2) * (1 + 1.1 * offender.emo.frus))) {
@@ -2072,8 +2157,12 @@ function aiSubs(s: MatchState, side: Side, minute: number, diff: number) {
   }
 }
 
-function setShout(s: MatchState, side: Side, shout: ShoutId | null) {
+/** Five game minutes before the same shout lifts the players again. */
+const SHOUT_COOLDOWN = 300;
+
+function setShout(s: MatchState, side: Side, shout: ShoutId | null): boolean {
   const team = s.teams[side];
+  const fresh = !!shout && (team.shout !== shout || team.shoutAt === undefined || s.tick - team.shoutAt >= SHOUT_COOLDOWN);
   team.shout = shout;
   for (const i of team.playerIdx) s.players[i].teamShout = shout;
   const lift: Record<ShoutId, Feeling> = {
@@ -2083,8 +2172,12 @@ function setShout(s: MatchState, side: Side, shout: ShoutId | null) {
     push: { conf: 0.03 },
     focus: { nerves: -0.06 },
   };
-  if (shout) teamFeel(s, side, lift[shout]);
+  if (shout && fresh) {
+    teamFeel(s, side, lift[shout]);
+    team.shoutAt = s.tick;
+  }
   emit(s, "shout", side, { text: shout ?? "none" });
+  return fresh;
 }
 
 function pickReplacement(bench: MPlayer[], pos: Position): MPlayer | undefined {
@@ -2142,9 +2235,17 @@ export function stepMatch(s: MatchState): void {
   if (s.phase === "dead") {
     updateTargets(s);
     if (s.restart?.type === "corner") positionForCorner(s, s.restart);
+    const taker = s.restart ? restartTaker(s, s.restart) : undefined;
+    if (taker && s.restart) {
+      taker.tx = s.restart.x;
+      taker.ty = s.restart.y;
+      taker.sprint = true;
+    }
     movePlayers(s);
     s.deadTimer--;
-    if (s.deadTimer <= 0 && s.restart) takeRestart(s, rng);
+    // wait (up to a few seconds) for the taker to reach the ball rather than teleporting him
+    const ready = !taker || !s.restart || dist(taker.x, taker.y, s.restart.x, s.restart.y) < 2 || s.deadTimer < -RESTART_WAIT;
+    if (s.deadTimer <= 0 && s.restart && ready) takeRestart(s, rng);
   } else {
     playTick(s, rng);
   }
@@ -2224,10 +2325,12 @@ function playTick(s: MatchState, rng: Rng) {
               if (rng.chance(pSteal)) {
                 opp.st.interceptions++;
                 r.st.possessionLost++;
+                unCompletePass(s, f);
                 r = opp;
               } else if (rng.chance(factor(eff(r, "firstTouch"), 0.09, 0.01))) {
                 // a heavy touch under pressure: the ball runs loose
                 r.st.possessionLost++;
+                unCompletePass(s, f);
                 s.ball.owner = null;
                 s.ball.x = clamp(r.x + (r.side === 0 ? 1 : -1) * rng.range(2, 4), 0.5, L - 0.5);
                 s.ball.y = clamp(r.y + rng.range(-2, 2), 0.5, W - 0.5);
@@ -2235,7 +2338,6 @@ function playTick(s: MatchState, rng: Rng) {
                 emit(s, "heavy_touch", r.side, { player: r.id });
                 feel(s, r, { conf: -0.04 });
                 updateTargets(s);
-                movePlayers(s);
                 return;
               }
             }
@@ -2251,7 +2353,6 @@ function playTick(s: MatchState, rng: Rng) {
               giveBall(s, gk, rng);
               emit(s, "claim", gk.side, { player: gk.id });
               updateTargets(s);
-              movePlayers(s);
               return;
             }
             const win = !contested || rng.chance(clamp(0.45 + (aerial(r) - aerial(opp!)) * 0.022, 0.15, 0.75));

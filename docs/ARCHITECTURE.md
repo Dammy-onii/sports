@@ -61,7 +61,7 @@ Career match kick-off freezes the setup and seed into `liveMatch`; commands are 
 
 The engine advances one second of game time per `stepMatch`. The viewer keeps mutable state in one animation loop, with React panel refreshes about every 220 ms. A time accumulator advances fixed simulation steps independently of canvas rendering; player and ball coordinates interpolate from previous to current positions.
 
-`components/match/playback.ts` fixes playback at seven minutes for 90 regulation minutes: `tps = 5400 / 420`. Seeded stoppage adds real time at that same rate. Half-time transitions, pauses and goal holds also add elapsed time. No fast-forward pace presets are exposed; highlights skip uneventful sections.
+`components/match/playback.ts` defines four paces (Relaxed 18, Normal 12, Quick 7, Fast 3½ real minutes per 90; `tps = 5400 / seconds`, Normal by default). Near either goal, for shots, crosses, corners and penalties the viewer runs at `KEY_MOMENT_SLOWDOWN` (0.55) of the chosen pace. Seeded stoppage, pauses and goal holds add elapsed time. Rendering remains independently selectable at 30 or 60 fps.
 
 The canvas targets 60 fps by default, with a separate 30 fps option and a once-per-second measured canvas-frame readout. The render target does not change the match clock. RAF gaps are capped at 100 ms; hidden documents do not advance, and visibility changes reset timing. Per-frame simulation budgets prevent long catch-up loops monopolising the UI. These are performance targets, not hardware-independent guarantees. Canvas pixel ratio is capped at 2 to bound rendering cost.
 
@@ -71,7 +71,7 @@ Pitch tokens show larger shirt numbers; optional surname labels prioritise the b
 
 ### Presentation motion
 
-`components/match/motion.ts` keeps visual positions and velocities separate from `MatchState`. Player travel is capped at 7 m/s with 8 m/s² acceleration; ball travel is capped at 26 m/s with 60 m/s² acceleration. Direction changes ease over real time, independently of compressed ticks. Presentation can trail simulation; these changes do not alter outcomes or replay. Drawing and hit-testing share the last painted positions. Highlight cuts, substitutions and half changes initialise positions explicitly. Manual pause freezes motion.
+`components/match/motion.ts` interpolates players and the ball from the same simulation snapshots. A possessed ball uses its carrier’s rendered coordinates exactly; flights use previous/current ball coordinates. There is no separate speed-limited chase or accumulated positional lag. Drawing and hit-testing share the last painted positions. Highlight cuts and half changes reset the view; manual pause freezes motion. Simulation rules and replay outcomes are unchanged.
 
 ## Training and staff effects
 

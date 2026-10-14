@@ -42,11 +42,30 @@ Shirt numbers stay on the pitch tokens. **Player names** toggles surname labels;
 
 Tap a player on the pitch, or open **Identify players** and select a name, to highlight that player and see position, assigned role, energy, passes, shots and rating. The Ratings tab gives the fuller individual stat sheet. Tactics pitch circles and squad choices show shirt numbers, with OVR shown separately.
 
+## Talking to players during the match
+
+Tap one of your players on the pitch (or in **Ratings**) and choose something to say: **Praise**, **Lift him**, **Demand more**, **Calm down**, **Concentrate**, **Win your battles**, **Express yourself**, or **Careful, you're booked** when he's on a yellow.
+
+How he takes it depends on him. Each option lists what decides it: for example flair and technique for *Express yourself*, determination and temperament for *Demand more*, composure and frustration for *Calm down*. His confidence, nerves, frustration, match rating so far, professionalism and rapport with you all count too. Replies range from *Fired up* to *Reacts badly*. A good reaction lifts his confidence or calms him and boosts the relevant attributes for 10 minutes; a bad one winds him up or knocks his confidence. With an assistant of quality 8 or more you see the assistant's read before you speak. You can't speak to the same player again for 4 minutes, and players tune out if you keep on at them.
+
+## Substitutions
+
+Tap who comes off, then who comes on. Changes are only planned until you press **Make changes**, so a wrong tap can be undone. Five substitutions per match. As in real football, a player who has been taken off can't come back on; he's listed under the bench as *Already substituted*.
+
+## What Rating and OVR mean
+
+- **OVR (overall, 1–99):** how good a player is in a position. It's the average of the attributes that matter for that position (each out of 20), scaled to 1–99 and reduced if he's out of position. It changes slowly, through training and age.
+- **Rating (3–10):** how well he's playing in this match. Everyone starts at about 6.3; goals, assists, key passes, tackles, interceptions, saves and accurate passing push it up, and lost balls, fouls, cards and goals conceded push it down. 6.0 is ordinary, 7.0 good, 8.0+ outstanding. Form is the average of the last five.
+
+Terms with a dashed underline anywhere in the game can be tapped for an explanation.
+
 ## Duration and frame rate
 
-Matches use one steady normal pace: **90 regulation minutes = 7 real minutes of active playback**. There are no ×2/×3 controls. Added-time minutes, half-time, pauses and celebrations add elapsed time. Highlights skip sections and therefore take less time.
+Pick a pace: **Relaxed** (90 minutes in about 18 real minutes), **Normal** (12, the default), **Quick** (7) or **Fast** (3½). With **Slow down near goal** on (the default), play runs at about half that pace whenever the ball is near either goal, a shot or cross is in the air, or there's a corner or penalty, so you can follow the chances. Added time, half-time, pauses and celebrations add elapsed time. Highlights skip the quiet spells.
 
-**30 fps / 60 fps** changes rendering, independently of the seven-minute game clock. Player animations have a 7 m/s top speed with gradual acceleration and turns; ball animation is capped at 26 m/s. The clock’s compression does not multiply these visual speeds. The presentation follows the simulated match with smoothing, so live events and statistics can lead the drawn positions. Highlight cuts and changes of ends reset the view. Pausing freezes movement. Selection uses the last painted player positions.
+A caption at the top of the pitch names what just happened (a foul, a save, a card, a sub) for a few seconds. Passes leave a dashed line from where they were played, with a ring where they're aimed; shots leave a red line.
+
+**30 fps / 60 fps** controls rendering independently of match speed. Players and passes interpolate together on the same simulation timeline, and the ball stays attached to the displayed player while possessed. Pause freezes the view; selection uses the last painted player positions.
 
 The default render target is 60 fps; 30 fps reduces rendering work. The live fps readout shows what the device achieves. Both targets produce the same seeded match results. Hidden tabs pause the match, preventing a large time jump when you return.
 

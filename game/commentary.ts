@@ -1,5 +1,6 @@
 import type { MatchEvent, MatchState } from "./engine/types";
 import { TALKS } from "./roles";
+import { OUTCOME_LABEL, WORDS, type WordId, type WordOutcome } from "./engine/words";
 
 const SHOUT_LINES: Record<string, string> = {
   encourage: "Heads up, keep going!",
@@ -112,6 +113,11 @@ export function commentaryFor(e: MatchEvent, s: MatchState): string {
     case "emotion":
       list = (T as Record<string, string[]>)[e.text ?? ""] ?? [""];
       break;
+    case "word": {
+      const [word, outcome, reply] = (e.text ?? "").split("|");
+      const info = WORDS[word as WordId];
+      return `${team.shortName} manager to ${p?.shortName ?? ""}: "${info?.line ?? ""}" ${reply ?? ""} (${OUTCOME_LABEL[outcome as WordOutcome] ?? ""})`;
+    }
     case "talk":
       return `${team.name} get a team talk: "${TALKS[e.text as keyof typeof TALKS]?.line ?? ""}"`;
     default:

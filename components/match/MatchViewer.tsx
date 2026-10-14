@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { commentaryFor, KEY_EVENTS } from "@/game/commentary";
 import { FORMATION_IDS, INSTRUCTION_LABELS } from "@/game/constants";
 import { replayLiveMatch } from "@/game/career";
-import { MAX_SUBS, applyCommand, clockString, createMatch, emotionLabel, isFinished, playerRating, stepMatch } from "@/game/engine";
+import { MAX_SUBS, applyCommand, clockString, createMatch, emotionLabel, isFinished, playerRating, stepMatch, type WordId } from "@/game/engine";
 import type { MatchEvent, MatchSetup, MatchState, MPlayer, Side } from "@/game/engine/types";
 import { familiarity, overallFromScore, positionScore } from "@/game/ratings";
 import type { RoleId, ShoutId, TalkTone } from "@/game/roles";
@@ -12,9 +12,11 @@ import type { Position, TeamInstructions } from "@/game/types";
 import { Button, Crest, Segmented, cn } from "../ui";
 import { highlightWindows } from "@/game/highlights";
 import { drawPitch, pitchPlayerAt, resolveKits } from "./drawPitch";
+import { PlayerWord } from "./PlayerWord";
+import { Term } from "../Term";
 import { AssistantCard, LiveAnnouncer, MatchTimeline, OppositionPicker, RolePicker, ShoutBar, TeamTalk } from "./MatchPanels";
 import { Slider } from "../Slider";
-import { MATCH_PACING, playbackDelta, playbackTicksPerSecond } from "./playback";
+import { DEFAULT_PACE, KEY_MOMENT_SLOWDOWN, MATCH_PACING, playbackDelta, playbackTicksPerSecond } from "./playback";
 import { createPitchMotion, updatePitchMotion, type PitchMotion } from "./motion";
 import { ROLES } from "@/game/roles";
 import { familiarityLabel, formationFamiliarity } from "@/game/familiarity";
@@ -60,7 +62,8 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
     refreshHighlights();
   };
   const [, setFrame] = useState(0);
-  const speed = 0;
+  const [speed, setSpeed] = useState(DEFAULT_PACE);
+  const [slowKey, setSlowKey] = useState(true);
   const [fps, setFps] = useState<30 | 60>(60);
   const [measuredFps, setMeasuredFps] = useState<number | null>(null);
   const [names, setNames] = useState(true);
@@ -80,7 +83,8 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
   const [mode, setMode] = useState<"full" | "highlights">("full");
   const ctl = useRef({
     paused: !(humanSides.length === 0 || match.tick > 0),
-    tps: playbackTicksPerSecond(MATCH_PACING[0].seconds),
+    tps: playbackTicksPerSecond(MATCH_PACING[DEFAULT_PACE].seconds),
+    slowKey: true,
     fps: 60,
     names: true,
     selectedId: null as string | null,
@@ -145,10 +149,11 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
   useEffect(() => {
     ctl.current.paused = paused;
     ctl.current.tps = playbackTicksPerSecond(MATCH_PACING[speed].seconds);
+    ctl.current.slowKey = slowKey;
     ctl.current.fps = fps;
     ctl.current.names = names;
     ctl.current.selectedId = selectedId;
-  }, [paused, speed, fps, names, selectedId, match]);
+  }, [paused, speed, slowKey, fps, names, selectedId, match]);
 
   // Simulation + render loop
   useEffect(() => {
@@ -233,7 +238,7 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
       const nextWindow = c.windows.find((w) => w[1] >= match.tick);
       const jumping = running && c.highlights && (!nextWindow || match.tick < nextWindow[0]);
       if (running && !c.paused && !jumping && readyToAdvance()) {
-        acc += dt * c.tps;
+        acc += dt * c.tps * (c.slowKey && keyMoment(match) ? KEY_MOMENT_SLOWDOWN : 1);
         const budgetStart = performance.now();
         while (acc >= 1 && performance.now() - budgetStart < 5) {
           acc -= 1;
@@ -387,6 +392,18 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
                 const bounds = event.currentTarget.getBoundingClientRect();
                 setSelectedId(pitchPlayerAt(match, bounds.width, bounds.height, event.clientX - bounds.left, event.clientY - bounds.top, motionRef.current));
               }} />
+            {(() => {
+              // what just happened, held on screen for about three real seconds
+              const e = lastCaption(match, playbackTicksPerSecond(MATCH_PACING[speed].seconds) * 3);
+              if (!e || banner || halftime || finished) return null;
+              return (
+                <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center px-3">
+                  <span key={e.tick + e.type} className="max-w-full truncate rounded-full bg-text/85 px-3 py-1 text-xs font-medium text-surface">
+                    {e.minute}′ {commentaryFor(e, match)}
+                  </span>
+                </div>
+              );
+            })()}
             {banner && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-bg/30">
                 <div key={banner.key} className="animate-pop text-center">
@@ -525,7 +542,7 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
                 {stopRequested ? "Waiting for a break…" : "Sub at next break"}
               </Button>
             )}
-            <span className="rounded-md border border-line px-3 py-2 text-xs font-semibold">7 minutes · normal pace</span>
+            <div aria-label="Match speed"><Segmented value={String(speed)} onChange={(value) => setSpeed(Number(value))} options={MATCH_PACING.map((pace, index) => ({ value: String(index), label: pace.label }))} /></div>
             <Segmented
               value={mode}
               onChange={setViewMode}
@@ -539,8 +556,9 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
             </Button>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-            <span>90 game minutes = 7 minutes of active playback. Stoppage, pauses and celebrations add time; highlights are shorter.</span>
+            <span>{MATCH_PACING[speed].label}: 90 minutes take about {MATCH_PACING[speed].duration}.{slowKey ? " Play slows down near the goals." : ""} Highlights skip the quiet spells.</span>
             <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1.5"><input type="checkbox" checked={slowKey} onChange={(event) => setSlowKey(event.target.checked)} className="accent-black" /> Slow down near goal</label>
               <label className="flex items-center gap-1.5"><input type="checkbox" checked={names} onChange={(event) => setNames(event.target.checked)} className="accent-black" /> Player names</label>
               <Segmented value={String(fps)} onChange={(value) => setFps(Number(value) as 30 | 60)} options={[{ value: "30", label: "30 fps" }, { value: "60", label: "60 fps" }]} />
               <span className="min-w-16 tabular" title="Measured canvas frames per second; the adjacent control sets the target.">{measuredFps === null ? "Measuring…" : `${measuredFps} fps live`}</span>
@@ -553,6 +571,11 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
               <strong>#{selected.shirt} {selected.shortName}</strong> · {match.teams[selected.side].shortName} · {selected.pos} · {ROLES[selected.role].label}
               <span className="ml-2 text-muted">Energy {Math.round(selected.energy * 100)}% · {selected.st.passesCompleted}/{selected.st.passes} passes · {selected.st.shots} shots · Rating {playerRating(match, selected).toFixed(1)}{!selected.onPitch ? " · Off the pitch" : ""}</span>
               <button className="ml-2 underline" onClick={() => setSelectedId(null)}>Clear</button>
+              {humanSides.includes(selected.side) && (
+                <div className="mt-2 border-t border-line pt-2">
+                  <PlayerWord match={match} p={selected} assistantQuality={assistantQuality} onWord={(word) => command({ type: "word", side: selected.side, playerId: selected.id, word })} />
+                </div>
+              )}
             </div>}
           </div>
           <details className="rounded-lg border border-line bg-surface px-3 py-2 text-xs">
@@ -657,7 +680,7 @@ export function MatchViewer({ setup, seed, humanSides, onFinish, finishLabel = "
           <div className="min-h-0 flex-1 overflow-y-auto">
             {tab === "commentary" && <CommentaryPanel match={match} />}
             {tab === "stats" && <StatsPanel match={match} />}
-            {tab === "ratings" && <RatingsPanel match={match} />}
+            {tab === "ratings" && <RatingsPanel match={match} humanSides={humanSides} assistantQuality={assistantQuality} onWord={(side, playerId, word) => command({ type: "word", side, playerId, word })} />}
             {tab === "tactics" && (
               <div className="divide-y divide-line">
                 {humanSides.map((side) => (
@@ -705,6 +728,26 @@ function CommentaryLine({ e, match }: { e: MatchEvent; match: MatchState }) {
       <span className={cn(color, (key || e.type === "goal") && "font-semibold")}>{commentaryFor(e, match)}</span>
     </li>
   );
+}
+
+const CAPTION_EVENTS = new Set<MatchEvent["type"]>(["shot_saved", "shot_wide", "shot_blocked", "big_save", "foul", "yellow", "red", "corner", "freekick", "penalty", "offside", "sub", "injury", "chance", "tackle", "word", "tactics", "claim", "heavy_touch"]);
+
+/** The most recent event worth naming on the pitch, if it happened within `ticks`. */
+function lastCaption(s: MatchState, ticks: number): MatchEvent | undefined {
+  for (let i = s.events.length - 1; i >= 0; i--) {
+    const e = s.events[i];
+    if (s.tick - e.tick > ticks) return undefined;
+    if (CAPTION_EVENTS.has(e.type)) return e;
+  }
+  return undefined;
+}
+
+/** The ball near either goal, a shot on its way or a set piece in a dangerous spot. */
+function keyMoment(s: MatchState): boolean {
+  if (s.ball.flight?.kind === "shot" || s.ball.flight?.kind === "cross") return true;
+  if (s.restart && (s.restart.type === "corner" || s.restart.type === "penalty")) return true;
+  const nearGoal = (s.ball.x < 25 || s.ball.x > 80) && Math.abs(s.ball.y - 34) < 24;
+  return nearGoal;
 }
 
 function luminance(hex: string) {
@@ -801,12 +844,12 @@ function mOverall(p: MPlayer, pos: Position) {
   return overallFromScore(positionScore(p.attrs, pos) * familiarity({ positions: p.naturalPositions }, pos));
 }
 
-function RatingsPanel({ match }: { match: MatchState }) {
+function RatingsPanel({ match, humanSides, assistantQuality, onWord }: { match: MatchState; humanSides: Side[]; assistantQuality: number; onWord: (side: Side, playerId: string, word: WordId) => void }) {
   const [open, setOpen] = useState<string | null>(null);
   return (
     <div>
       <TeamHeader match={match} />
-      <p className="px-4 pt-2 text-[11px] text-muted">Tap a player for his full match stats.</p>
+      <p className="px-4 pt-2 text-[11px] text-muted">Tap a player for his match stats{humanSides.length ? ", or to have a word with one of yours" : ""}. The number on the right is his <Term k="rating">match rating</Term>; <Term k="ovr">OVR</Term> is his ability in that position.</p>
       <div className="grid grid-cols-1 gap-4 p-3 sm:grid-cols-2 lg:grid-cols-1">
         {match.teams.map((t) => {
           const ps = t.playerIdx.map((i) => match.players[i]).filter((p) => p.used);
@@ -814,7 +857,8 @@ function RatingsPanel({ match }: { match: MatchState }) {
             <ul key={t.side}>
               <li className="eyebrow mb-1 px-1">{t.shortName}</li>
               {ps.map((p) => (
-                <PlayerRow key={p.id} p={p} match={match} open={open === p.id} onToggle={() => setOpen(open === p.id ? null : p.id)} />
+                <PlayerRow key={p.id} p={p} match={match} open={open === p.id} onToggle={() => setOpen(open === p.id ? null : p.id)}
+                  talk={humanSides.includes(t.side) ? <PlayerWord match={match} p={p} assistantQuality={assistantQuality} onWord={(word) => onWord(t.side, p.id, word)} /> : null} />
               ))}
             </ul>
           );
@@ -824,7 +868,7 @@ function RatingsPanel({ match }: { match: MatchState }) {
   );
 }
 
-function PlayerRow({ p, match, open, onToggle }: { p: MPlayer; match: MatchState; open: boolean; onToggle: () => void }) {
+function PlayerRow({ p, match, open, onToggle, talk }: { p: MPlayer; match: MatchState; open: boolean; onToggle: () => void; talk?: React.ReactNode }) {
   const r = playerRating(match, p);
   const st = p.st;
   const minutes = Math.round(p.ticksPlayed / 60);
@@ -879,13 +923,16 @@ function PlayerRow({ p, match, open, onToggle }: { p: MPlayer; match: MatchState
         <span className={cn("w-9 rounded px-1 text-center text-xs font-bold tabular", ratingColor(r))}>{r.toFixed(1)}</span>
       </button>
       {open && (
-        <div className="grid grid-cols-3 gap-1 px-2 pb-2 text-center">
-          {stats.map(([l, v]) => (
-            <div key={l} className="rounded bg-surface px-1 py-1">
-              <div className="text-[10px] text-muted">{l}</div>
-              <div className="text-xs font-semibold tabular">{v}</div>
-            </div>
-          ))}
+        <div className="flex flex-col gap-3 px-2 pb-2">
+          {talk}
+          <div className="grid grid-cols-3 gap-1 text-center">
+            {stats.map(([l, v]) => (
+              <div key={l} className="rounded bg-surface px-1 py-1">
+                <div className="text-[10px] text-muted">{l}</div>
+                <div className="text-xs font-semibold tabular">{v}</div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </li>
@@ -895,22 +942,34 @@ function PlayerRow({ p, match, open, onToggle }: { p: MPlayer; match: MatchState
 function TacticsPanel({ match, side, onChange }: { match: MatchState; side: Side; onChange: () => void }) {
   const team = match.teams[side];
   const [outId, setOutId] = useState<string | null>(null);
+  /** Changes are planned first and only made when confirmed, so a wrong tap can be undone. */
+  const [planned, setPlanned] = useState<{ outId: string; inId: string }[]>([]);
   const players = team.playerIdx.map((i) => match.players[i]);
   const onField = players.filter((p) => p.onPitch);
-  const bench = players.filter((p) => !p.used && !p.onPitch && !p.sentOff);
+  const plannedIn = new Set(planned.map((c) => c.inId));
+  const plannedOut = new Set(planned.map((c) => c.outId));
+  const bench = players.filter((p) => !p.used && !p.onPitch && !p.sentOff && !plannedIn.has(p.id));
+  const usedUp = players.filter((p) => p.subbedOff && !p.onPitch);
   const finished = isFinished(match);
   const outgoing = outId ? players.find((p) => p.id === outId) : undefined;
-  const canSub = !finished && team.subsUsed < MAX_SUBS;
+  const subsLeft = MAX_SUBS - team.subsUsed - planned.length;
+  const canSub = !finished && subsLeft > 0;
+  const byId = (id: string) => players.find((p) => p.id === id);
 
   function setInstruction(k: keyof TeamInstructions, v: number) {
     applyCommand(match, { type: "instructions", side, instructions: { ...team.instructions, [k]: v } });
     onChange();
   }
 
-  function sub(inId: string) {
+  function plan(inId: string) {
     if (!outId) return;
-    applyCommand(match, { type: "sub", side, outId, inId });
+    setPlanned([...planned, { outId, inId }]);
     setOutId(null);
+  }
+
+  function makeChanges() {
+    for (const c of planned) applyCommand(match, { type: "sub", side, outId: c.outId, inId: c.inId });
+    setPlanned([]);
     onChange();
   }
 
@@ -994,24 +1053,54 @@ function TacticsPanel({ match, side, onChange }: { match: MatchState; side: Side
         <div className="mb-2 flex items-center justify-between text-xs">
           <span className="font-semibold">Substitutions</span>
           <span className="text-muted">
-            {team.subsUsed}/{MAX_SUBS} used
+            {team.subsUsed}/{MAX_SUBS} used{planned.length ? ` · ${planned.length} planned` : ""}
           </span>
         </div>
         <p className="mb-2 text-xs text-muted">
-          {outgoing ? `Replacing ${outgoing.shortName} (${outgoing.pos}). Pick who comes on.` : "1. Tap who comes off. 2. Tap who comes on."}
+          {outgoing ? `Replacing ${outgoing.shortName} (${outgoing.pos}). Pick who comes on.` : "1. Tap who comes off. 2. Tap who comes on. 3. Confirm. Nothing changes until you confirm."}
         </p>
+
+        {planned.length > 0 && (
+          <div className="mb-3 flex flex-col gap-1.5 rounded-md border border-win/50 bg-highlight/50 p-2">
+            <span className="text-[11px] font-semibold">Ready to make {planned.length === 1 ? "this change" : `these ${planned.length} changes`}</span>
+            {planned.map((c) => {
+              const o = byId(c.outId);
+              const i = byId(c.inId);
+              return (
+                <div key={c.outId} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="truncate">
+                    <span className="text-loss-ink">↓ #{o?.shirt} {o?.shortName}</span> <span className="text-muted">for</span> <span className="text-win-ink">↑ #{i?.shirt} {i?.shortName}</span>
+                  </span>
+                  <button type="button" className="shrink-0 text-[11px] underline" onClick={() => setPlanned(planned.filter((x) => x !== c))}>
+                    Undo
+                  </button>
+                </div>
+              );
+            })}
+            <div className="mt-1 flex gap-2">
+              <button type="button" disabled={finished} onClick={makeChanges} className="rounded-md bg-text px-3 py-1.5 text-xs font-semibold text-surface disabled:opacity-40">
+                Make {planned.length === 1 ? "change" : "changes"}
+              </button>
+              <button type="button" onClick={() => setPlanned([])} className="rounded-md border border-line px-3 py-1.5 text-xs">
+                Cancel all
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="mb-1 grid grid-cols-[1fr_auto_auto] gap-x-2 px-2 text-[10px] text-muted">
           <span>On the pitch</span>
-          <span>Rating</span>
+          <Term k="rating">Rating</Term>
           <span>Energy</span>
         </div>
         <div className="flex flex-col gap-1">
           {onField.map((p) => {
             const r = playerRating(match, p);
+            const leaving = plannedOut.has(p.id);
             return (
               <button
                 key={p.id}
-                disabled={!canSub}
+                disabled={leaving || (!canSub && outId !== p.id)}
                 onClick={() => setOutId(outId === p.id ? null : p.id)}
                 className={cn(
                   "grid grid-cols-[28px_1fr_auto_40px] items-center gap-2 rounded-md border px-2 py-1 text-left text-xs disabled:opacity-40",
@@ -1019,7 +1108,7 @@ function TacticsPanel({ match, side, onChange }: { match: MatchState; side: Side
                 )}
               >
                 <span className="text-[10px] text-muted">{p.pos}</span>
-                <span className="truncate"><span className="mr-1 font-semibold tabular">#{p.shirt}</span>{p.shortName}</span>
+                <span className="truncate"><span className="mr-1 font-semibold tabular">#{p.shirt}</span>{p.shortName}{leaving && <span className="ml-1 text-[10px] text-loss-ink">coming off</span>}</span>
                 <span className={cn("w-8 rounded px-1 text-center font-bold tabular", ratingColor(r))}>{r.toFixed(1)}</span>
                 <span className={cn("text-right tabular", energyClass(p.energy))}>{Math.round(p.energy * 100)}%</span>
               </button>
@@ -1029,15 +1118,15 @@ function TacticsPanel({ match, side, onChange }: { match: MatchState; side: Side
 
         <div className="mb-1 mt-3 grid grid-cols-[1fr_auto_auto] gap-x-2 px-2 text-[10px] text-muted">
           <span>Bench</span>
-          <span>{outgoing ? `OVR as ${outgoing.pos}` : "OVR"}</span>
+          <Term k="ovr">{outgoing ? `OVR as ${outgoing.pos}` : "OVR"}</Term>
           <span>Fitness</span>
         </div>
         <div className="flex flex-col gap-1">
           {bench.map((p) => (
             <button
               key={p.id}
-              disabled={!outgoing || !canSub}
-              onClick={() => sub(p.id)}
+              disabled={!outgoing}
+              onClick={() => plan(p.id)}
               className={cn(
                 "grid grid-cols-[28px_1fr_auto_40px] items-center gap-2 rounded-md border px-2 py-1 text-left text-xs",
                 outgoing ? "border-win/50 bg-highlight" : "border-line opacity-80",
@@ -1049,7 +1138,19 @@ function TacticsPanel({ match, side, onChange }: { match: MatchState; side: Side
               <span className={cn("text-right tabular", energyClass(p.energy))}>{Math.round(p.energy * 100)}%</span>
             </button>
           ))}
-          {bench.length === 0 && <span className="text-xs text-muted">No substitutes left.</span>}
+          {bench.length === 0 && <span className="text-xs text-muted">No substitutes left on the bench.</span>}
+          {usedUp.length > 0 && (
+            <div className="mt-2 flex flex-col gap-1">
+              <span className="px-2 text-[10px] text-muted">Already substituted. Under football&apos;s rules a player who comes off can&apos;t come back on.</span>
+              {usedUp.map((p) => (
+                <div key={p.id} className="grid grid-cols-[28px_1fr_auto] items-center gap-2 rounded-md border border-dashed border-line px-2 py-1 text-xs text-muted">
+                  <span className="text-[10px]">{p.naturalPositions[0]}</span>
+                  <span className="truncate"><span className="mr-1 tabular">#{p.shirt}</span>{p.shortName}</span>
+                  <span className="text-[10px]">{p.injured ? "Injured" : "Off"}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -160,6 +160,25 @@ export function drawPitch(ctx: CanvasRenderingContext2D, w: number, h: number, s
   // ball
   const bx = options.motion?.ball.x ?? s.ball.px + (s.ball.x - s.ball.px) * alpha;
   const by = options.motion?.ball.y ?? s.ball.py + (s.ball.y - s.ball.py) * alpha;
+  // where the ball came from and where it's going, so passes and shots can be followed
+  const f = s.ball.flight;
+  if (f) {
+    ctx.save();
+    ctx.strokeStyle = f.kind === "shot" ? "rgba(217,72,43,0.85)" : "rgba(20,20,20,0.45)";
+    ctx.lineWidth = f.kind === "shot" ? 2 : 1.5;
+    ctx.setLineDash(f.kind === "shot" ? [] : [5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(X(f.fromX), Y(f.fromY));
+    ctx.lineTo(X(bx), Y(by));
+    ctx.stroke();
+    if (f.kind !== "shot" && f.kind !== "clear") {
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(X(f.toX), Y(f.toY), r * 0.7, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
   const lift = s.ball.z * r * 1.6;
   const br = Math.max(3, r * 0.42) * (1 + s.ball.z * 0.35);
   ctx.fillStyle = "rgba(0,0,0,0.35)";
